@@ -31,6 +31,7 @@ export interface ConciergeResponse {
   confidence: number;
   reply: string;
   suggestedActions: string[];
+  source: "llm" | "rules";
 }
 
 function classify(message: string): { intent: Intent; confidence: number } {
@@ -128,7 +129,7 @@ export function handleConciergeMessage(message: string, guestId?: string): Conci
   const guest = GUEST_PROFILES.find((g) => g.id === guestId);
   const { intent, confidence } = classify(message);
   const { reply, actions } = respondFor(intent, guest);
-  return { intent, confidence, reply, suggestedActions: actions };
+  return { intent, confidence, reply, suggestedActions: actions, source: "rules" };
 }
 
 export interface ProactiveRecommendation {

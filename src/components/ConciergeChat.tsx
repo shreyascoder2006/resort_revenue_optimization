@@ -9,6 +9,7 @@ interface ChatMessage {
   role: "guest" | "concierge";
   text: string;
   intent?: string;
+  source?: "llm" | "rules";
 }
 
 const STARTER_PROMPTS = [
@@ -55,7 +56,7 @@ export default function ConciergeChat() {
       });
       const data = await res.json();
       if (res.ok) {
-        setMessages((m) => [...m, { role: "concierge", text: data.reply, intent: data.intent }]);
+        setMessages((m) => [...m, { role: "concierge", text: data.reply, intent: data.intent, source: data.source }]);
       } else {
         setMessages((m) => [...m, { role: "concierge", text: "Sorry, something went wrong processing that request." }]);
       }
@@ -106,8 +107,13 @@ export default function ConciergeChat() {
         )}
         <div className="flex flex-col gap-2">
           {messages.map((m, i) => (
-            <div key={i} className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${m.role === "guest" ? "self-end bg-series-1 text-white" : "self-start bg-surface-raised border border-border-strong text-ink"}`}>
-              {m.text}
+            <div key={i} className={`flex max-w-[85%] flex-col gap-1 ${m.role === "guest" ? "self-end items-end" : "self-start items-start"}`}>
+              <div className={`rounded-lg px-3 py-2 text-sm ${m.role === "guest" ? "bg-series-1 text-white" : "bg-surface-raised border border-border-strong text-ink"}`}>
+                {m.text}
+              </div>
+              {m.role === "concierge" && m.source === "rules" && (
+                <span className="px-1 text-[11px] text-ink-muted">Offline demo mode - rule-based reply</span>
+              )}
             </div>
           ))}
           {loading && <div className="self-start rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm text-ink-muted">Thinking…</div>}
