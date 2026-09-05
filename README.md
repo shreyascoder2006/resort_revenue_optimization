@@ -20,18 +20,24 @@ Each run computes a real "before" and "after" from the actual engines (not canne
 |---|---|---|
 | Revenue | `lib/engines/pricing.ts` | Per-room-type nightly rate recommendations for the next 21 days, driven by occupancy forecast, day-of-week, lead time, and local demand events (festivals, holidays, cancellations). Reports ADR, RevPAR, and projected revenue lift vs. flat pricing. |
 | Guest experience | `lib/engines/sentiment.ts` | Lexicon-based sentiment scoring of guest reviews, aggregated by aspect (cleanliness, staff, food, noise, spa, etc.), with week-over-week trend detection and a ranked list of the most negative recent issues. |
-| Guest experience | `lib/engines/concierge-llm.ts` (+ `concierge.ts` fallback) | Conversational handling of free-text guest requests (dining, spa, activities, transport, housekeeping, tech support, checkout, complaints), grounded in the guest's profile, preferences, and the resort's real services/events data, plus proactive per-guest recommendations. |
+| Guest experience | `lib/engines/concierge-gemini.ts` / `concierge-llm.ts` (+ `concierge.ts` fallback) | Conversational handling of free-text guest requests (dining, spa, activities, transport, housekeeping, tech support, checkout, complaints), grounded in the guest's profile, preferences, and the resort's real services/events data, plus proactive per-guest recommendations. |
 | Operations | `lib/engines/maintenance.ts` | Predictive failure-risk scoring for resort equipment from age, service overdue ratio, and simulated sensor anomaly readings, with a recommended action and urgency window. |
 | Operations | `lib/engines/staffing.ts` | Compares forecasted occupancy-driven staffing need against the drafted schedule per department, flagging under/overstaffed shifts. |
 | Operations | `lib/engines/inventory.ts` | Projects days-of-stock-remaining per inventory item against lead time and forecasted demand, flagging reorder points and recommended order quantities. |
 
 All six engines accept optional scenario overrides (an extra demand event, a forced equipment failure, injected reviews) and are exposed as JSON APIs under `src/app/api/*`. `src/lib/engines/scenarios.ts` composes them into the three Scenario Simulator presets above via `src/app/api/simulate`.
 
-## AI concierge: real Claude API, with a deterministic fallback
+## AI concierge: real LLMs, with a deterministic fallback
 
-The concierge is the one place in the app that calls a real LLM. `POST /api/concierge` first tries `handleConciergeMessageLLM` (`src/lib/engines/concierge-llm.ts`), which calls the Claude API (`claude-opus-5`, low effort, structured output via a Zod schema) with a system prompt grounded in the guest's profile, preferences, and the resort's actual restaurants/spa/activities/transport/events data. If `ANTHROPIC_API_KEY` isn't set, or the call fails for any reason (network, rate limit, invalid key), it falls back to the deterministic rule-based engine in `concierge.ts` - same response shape, same UI, no crash. The chat UI labels a reply "Offline demo mode" whenever the fallback served it, so it's always clear which path answered.
+The concierge is the one place in the app that calls a real LLM - and it can call either of two providers. `POST /api/concierge` tries them in order, first result wins:
 
-To enable it: copy `.env.example` to `.env.local` and set `ANTHROPIC_API_KEY` (locally) or add it as an environment variable in your Vercel project settings (in production). No key is required to run or demo the app - every other engine is deterministic, explainable data science (weighted scoring, lexicon matching, intent keyword matching) with no external dependency, and the concierge itself degrades gracefully without one.
+1. **Gemini** (`src/lib/engines/concierge-gemini.ts`) - `gemini-3.6-flash` via `@google/genai`, JSON-schema structured output. Retries once on a transient 503/429 before giving up.
+2. **Claude** (`src/lib/engines/concierge-llm.ts`) - `claude-opus-5` via `@anthropic-ai/sdk`, low effort, structured output via a Zod schema.
+3. **Rule-based fallback** (`concierge.ts`) - deterministic keyword matching, same response shape.
+
+Both LLM paths share one system prompt (`concierge-prompt.ts`) grounded in the guest's profile, preferences, and the resort's actual restaurants/spa/activities/transport/events data. If neither `GEMINI_API_KEY` nor `ANTHROPIC_API_KEY` is set, or a call fails for any reason (network, rate limit, invalid key), the chain falls through to the next provider and ultimately to the rule-based engine - same shape, same UI, no crash. The chat UI labels a reply "Offline demo mode" whenever the fallback served it, so it's always clear which path answered.
+
+To enable it: copy `.env.example` to `.env.local` and set `GEMINI_API_KEY` and/or `ANTHROPIC_API_KEY` (locally), or add them as environment variables in your Vercel project settings (in production). No key is required to run or demo the app - every other engine is deterministic, explainable data science (weighted scoring, lexicon matching, intent keyword matching) with no external dependency, and the concierge itself degrades gracefully without either key.
 
 ## Data
 

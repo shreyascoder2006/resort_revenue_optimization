@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { handleConciergeMessage, buildProactiveRecommendations } from "@/lib/engines/concierge";
 import { handleConciergeMessageLLM } from "@/lib/engines/concierge-llm";
+import { handleConciergeMessageGemini } from "@/lib/engines/concierge-gemini";
 import { GUEST_PROFILES } from "@/lib/data/guests";
 
 export async function GET() {
@@ -29,6 +30,9 @@ export async function POST(request: Request) {
 
   const validGuestId = typeof guestId === "string" && GUEST_PROFILES.some((g) => g.id === guestId) ? guestId : undefined;
 
-  const response = (await handleConciergeMessageLLM(message, validGuestId)) ?? handleConciergeMessage(message, validGuestId);
+  const response =
+    (await handleConciergeMessageGemini(message, validGuestId)) ??
+    (await handleConciergeMessageLLM(message, validGuestId)) ??
+    handleConciergeMessage(message, validGuestId);
   return NextResponse.json(response);
 }
