@@ -1,5 +1,5 @@
 import { makeRng, addDays, isoDate } from "./random";
-import { ROOM_TYPES, TODAY, DEMAND_EVENTS, type RoomType } from "./rooms";
+import { ROOM_TYPES, TODAY, DEMAND_EVENTS, type RoomType, type DemandEvent } from "./rooms";
 
 export interface DailyOccupancy {
   date: string;
@@ -19,6 +19,7 @@ export interface DemandForecastDay {
   forecastOccupancyRate: number;
   isEvent: boolean;
   eventLabel?: string;
+  eventDemandBoost?: number; // signed: positive = demand driver, negative = demand disruption
 }
 
 const HISTORY_DAYS = 90;
@@ -36,8 +37,9 @@ function weekdayFactor(date: Date): number {
   return map[day];
 }
 
-function eventFor(dateIso: string) {
-  return DEMAND_EVENTS.find((e) => e.date === dateIso);
+function eventFor(dateIso: string, roomTypeId: string, extraEvents: DemandEvent[]) {
+  const events = [...DEMAND_EVENTS, ...extraEvents];
+  return events.find((e) => e.date === dateIso && (!e.roomTypeId || e.roomTypeId === roomTypeId));
 }
 
 export function generateOccupancyHistory(seed = 42): DailyOccupancy[] {
@@ -79,7 +81,7 @@ function clamp01(n: number) {
   return Math.min(0.98, Math.max(0.12, n));
 }
 
-export function generateDemandForecast(seed = 99): DemandForecastDay[] {
+export function generateDemandForecast(seed = 99, extraEvents: DemandEvent[] = []): DemandForecastDay[] {
   const rng = makeRng(seed);
   const rows: DemandForecastDay[] = [];
 
@@ -88,7 +90,7 @@ export function generateDemandForecast(seed = 99): DemandForecastDay[] {
     for (let i = 0; i < FORECAST_DAYS; i++) {
       const date = addDays(TODAY, i);
       const dateIso = isoDate(date);
-      const event = eventFor(dateIso);
+      const event = eventFor(dateIso, room.id, extraEvents);
       const base = 0.6 * roomPersonality;
       let finalRate = clamp01(base * weekdayFactor(date) * rng.range(0.95, 1.05));
       if (event) finalRate = clamp01(finalRate * (1 + event.demandBoost));
@@ -105,6 +107,7 @@ export function generateDemandForecast(seed = 99): DemandForecastDay[] {
         forecastOccupancyRate: finalRate,
         isEvent: Boolean(event),
         eventLabel: event?.label,
+        eventDemandBoost: event?.demandBoost,
       });
     }
   }

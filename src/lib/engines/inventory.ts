@@ -1,6 +1,6 @@
 import { generateInventory, type InventoryItem } from "../data/inventory";
 import { generateDemandForecast } from "../data/bookings";
-import { ROOM_TYPES } from "../data/rooms";
+import { ROOM_TYPES, type DemandEvent } from "../data/rooms";
 
 export interface InventoryStatus {
   item: InventoryItem;
@@ -14,8 +14,8 @@ export interface InventoryStatus {
 const BASELINE_OCCUPANCY = 0.65;
 const SAFETY_BUFFER_DAYS = 3;
 
-function nearTermOccupancyRate(): number {
-  const forecast = generateDemandForecast();
+function nearTermOccupancyRate(extraEvents: DemandEvent[]): number {
+  const forecast = generateDemandForecast(99, extraEvents);
   const totalRooms = ROOM_TYPES.reduce((s, r) => s + r.count, 0);
   const nextWeek = forecast.filter((f) => f.leadDays < 7);
   const totalBooked = nextWeek.reduce((s, f) => s + f.bookedRooms, 0);
@@ -23,9 +23,9 @@ function nearTermOccupancyRate(): number {
   return totalBooked / (totalRooms * days);
 }
 
-export function buildInventoryStatus(): InventoryStatus[] {
+export function buildInventoryStatus(extraEvents: DemandEvent[] = []): InventoryStatus[] {
   const items = generateInventory();
-  const occupancyRate = nearTermOccupancyRate();
+  const occupancyRate = nearTermOccupancyRate(extraEvents);
   const demandScale = Math.max(0.5, occupancyRate / BASELINE_OCCUPANCY);
 
   return items

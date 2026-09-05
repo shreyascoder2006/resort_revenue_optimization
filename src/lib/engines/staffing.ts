@@ -1,5 +1,6 @@
 import { generateDemandForecast } from "../data/bookings";
 import { DEPARTMENTS, generateStaffSchedule } from "../data/staff";
+import type { DemandEvent } from "../data/rooms";
 
 export interface StaffingDay {
   date: string;
@@ -12,8 +13,8 @@ export interface StaffingDay {
   status: "Understaffed" | "Overstaffed" | "Balanced";
 }
 
-export function buildStaffingPlan(): StaffingDay[] {
-  const forecast = generateDemandForecast();
+export function buildStaffingPlan(extraEvents: DemandEvent[] = []): StaffingDay[] {
+  const forecast = generateDemandForecast(99, extraEvents);
   const schedule = generateStaffSchedule();
 
   const occupiedByDate = new Map<string, number>();

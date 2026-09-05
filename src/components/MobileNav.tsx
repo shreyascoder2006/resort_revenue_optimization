@@ -7,6 +7,7 @@ import clsx from "clsx";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Overview" },
+  { href: "/dashboard/simulator", label: "Scenario Simulator" },
   { href: "/dashboard/revenue", label: "Revenue & Pricing" },
   { href: "/dashboard/guest-experience", label: "Guest Experience" },
   { href: "/dashboard/operations", label: "Operations" },

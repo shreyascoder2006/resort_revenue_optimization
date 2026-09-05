@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, TrendingUp, MessageSquareHeart, Wrench, Palmtree } from "lucide-react";
+import { LayoutDashboard, TrendingUp, MessageSquareHeart, Wrench, Palmtree, Zap } from "lucide-react";
 import clsx from "clsx";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
+  { href: "/dashboard/simulator", label: "Scenario Simulator", icon: Zap },
   { href: "/dashboard/revenue", label: "Revenue & Pricing", icon: TrendingUp },
   { href: "/dashboard/guest-experience", label: "Guest Experience", icon: MessageSquareHeart },
   { href: "/dashboard/operations", label: "Operations", icon: Wrench },

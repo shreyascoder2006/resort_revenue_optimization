@@ -1,4 +1,4 @@
-import { generateReviews, type Review, type Aspect } from "../data/reviews";
+import { generateReviews, type Review, type Aspect, type InjectedReview } from "../data/reviews";
 
 const POSITIVE_WORDS = [
   "amazing", "outstanding", "excellent", "wonderful", "fantastic", "great", "fresh", "flavorful",
@@ -70,8 +70,8 @@ function weekStartOf(dateIso: string): string {
   return d.toISOString().slice(0, 10);
 }
 
-export function buildSentimentSummary(): SentimentSummary {
-  const reviews = generateReviews();
+export function buildSentimentSummary(injectedReviews: InjectedReview[] = []): SentimentSummary {
+  const reviews = generateReviews(7, 220, injectedReviews);
   const scored = reviews.map((r) => ({ ...r, score: scoreText(r.text) }));
 
   const overallScore = avg(scored.map((r) => r.score));

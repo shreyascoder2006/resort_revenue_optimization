@@ -28,18 +28,27 @@ const EQUIPMENT_TEMPLATES: Array<Omit<Equipment, "id" | "daysSinceService" | "se
   { name: "Industrial Laundry Dryer", category: "Laundry", location: "Laundry Facility", installedYearsAgo: 6, ratedLifeYears: 9, serviceIntervalDays: 45, runtimeHoursPerDay: 14 },
 ];
 
-export function generateEquipment(seed = 33): Equipment[] {
+export function generateEquipment(seed = 33, forceFailureId?: string): Equipment[] {
   const rng = makeRng(seed);
   return EQUIPMENT_TEMPLATES.map((t, idx) => {
+    const id = `eq-${idx + 1}`;
     // Some assets are overdue on purpose to create realistic alerts.
     const overdueBias = idx % 3 === 0 ? rng.range(1.1, 1.9) : rng.range(0.2, 1.0);
-    const daysSinceService = Math.round(t.serviceIntervalDays * overdueBias);
+    let daysSinceService = Math.round(t.serviceIntervalDays * overdueBias);
     const ageRatio = t.installedYearsAgo / t.ratedLifeYears;
-    const anomalyBase = ageRatio * 0.35 + (daysSinceService / t.serviceIntervalDays) * 0.25;
-    const sensorAnomalyScore = Math.min(0.98, Math.max(0.02, anomalyBase + rng.range(-0.1, 0.15)));
+    let sensorAnomalyScore = Math.min(
+      0.98,
+      Math.max(0.02, ageRatio * 0.35 + (daysSinceService / t.serviceIntervalDays) * 0.25 + rng.range(-0.1, 0.15))
+    );
+
+    if (id === forceFailureId) {
+      // Simulates a sudden overnight failure: sensor readings spike and service is now badly overdue.
+      daysSinceService = Math.round(t.serviceIntervalDays * 2.2);
+      sensorAnomalyScore = 0.96;
+    }
 
     return {
-      id: `eq-${idx + 1}`,
+      id,
       ...t,
       daysSinceService,
       sensorAnomalyScore,

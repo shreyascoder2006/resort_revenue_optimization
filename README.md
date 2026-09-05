@@ -4,18 +4,28 @@ AI-powered resort operations, guest experience, and revenue intelligence platfor
 
 Modern resorts split occupancy, staffing, maintenance, inventory, guest feedback, and pricing data across disconnected systems, making it hard to see what's happening in real time or act before small problems become guest-facing ones. This prototype pulls that data into one decision-support platform and turns it into concrete recommendations, alerts, and an interactive concierge — not just dashboards.
 
+## Scenario Simulator — see the engines think, live
+
+The fastest way to see this is more than a set of dashboards: open **Scenario Simulator** in the app nav, pick a disruption, and watch it play out in real time across the *same* engines that power the rest of the dashboard.
+
+- **Surprise Festival Announced** — an unplanned demand spike lands 2 days out. Watch the pricing engine raise rates, and the staffing engine catch that the schedule (drafted before the event existed) is now short.
+- **Chiller Fails Overnight** — one piece of equipment's sensor readings spike. The maintenance engine's risk score jumps to Critical, and a batch of same-night guest reviews about the heat drags down "room comfort" sentiment — linking an equipment fault to a guest-experience risk before it ever hits a review site.
+- **Group Cancels + Bad Reviews** — a family-suite booking cancels while negative "value" reviews start coming in. Pricing discounts to refill the gap while sentiment confirms *why* it happened.
+
+Each run computes a real "before" and "after" from the actual engines (not canned animation): `src/lib/engines/scenarios.ts` calls the same `build*` functions used everywhere else, once with no changes and once with the scenario's perturbation, then diffs the two into the KPI deltas and alerts you see reveal on screen.
+
 ## What it does
 
 | Area | Engine | What it produces |
 |---|---|---|
-| Revenue | `lib/engines/pricing.ts` | Per-room-type nightly rate recommendations for the next 21 days, driven by occupancy forecast, day-of-week, lead time, and local demand events (festivals, holidays). Reports ADR, RevPAR, and projected revenue lift vs. flat pricing. |
+| Revenue | `lib/engines/pricing.ts` | Per-room-type nightly rate recommendations for the next 21 days, driven by occupancy forecast, day-of-week, lead time, and local demand events (festivals, holidays, cancellations). Reports ADR, RevPAR, and projected revenue lift vs. flat pricing. |
 | Guest experience | `lib/engines/sentiment.ts` | Lexicon-based sentiment scoring of guest reviews, aggregated by aspect (cleanliness, staff, food, noise, spa, etc.), with week-over-week trend detection and a ranked list of the most negative recent issues. |
 | Guest experience | `lib/engines/concierge.ts` | Rule-based intent classification over free-text guest requests (dining, spa, activities, transport, housekeeping, tech support, checkout, complaints), personalized using each guest's profile and preferences, plus proactive per-guest recommendations. |
 | Operations | `lib/engines/maintenance.ts` | Predictive failure-risk scoring for resort equipment from age, service overdue ratio, and simulated sensor anomaly readings, with a recommended action and urgency window. |
 | Operations | `lib/engines/staffing.ts` | Compares forecasted occupancy-driven staffing need against the drafted schedule per department, flagging under/overstaffed shifts. |
 | Operations | `lib/engines/inventory.ts` | Projects days-of-stock-remaining per inventory item against lead time and forecasted demand, flagging reorder points and recommended order quantities. |
 
-All six engines are exposed as JSON APIs under `src/app/api/*` and rendered across four dashboard pages (Overview, Revenue & Pricing, Guest Experience, Operations).
+All six engines accept optional scenario overrides (an extra demand event, a forced equipment failure, injected reviews) and are exposed as JSON APIs under `src/app/api/*`. `src/lib/engines/scenarios.ts` composes them into the three Scenario Simulator presets above via `src/app/api/simulate`.
 
 ## Why rule/heuristic-based "AI" instead of an LLM
 
@@ -36,7 +46,7 @@ npm install
 npm run dev
 ```
 
-Then open `http://localhost:3000`.
+Then open `http://localhost:3000` for the landing page, or go straight to `http://localhost:3000/dashboard`.
 
 ```bash
 npm run build   # production build
@@ -48,15 +58,18 @@ npm run lint    # eslint
 ```
 src/
   lib/
-    data/        # synthetic data generators (rooms, bookings, reviews, staff, equipment, inventory, guests)
-    engines/      # the six intelligence engines described above
+    data/            # synthetic data generators (rooms, bookings, reviews, staff, equipment, inventory, guests)
+    engines/         # the six intelligence engines, plus scenarios.ts composing them for the simulator
   app/
-    api/          # REST endpoints wrapping each engine
-    page.tsx              # Overview
-    revenue/              # Revenue & Dynamic Pricing
-    guest-experience/     # Sentiment analysis + AI concierge
-    operations/           # Predictive maintenance, staffing, inventory
-  components/     # shared UI (KPI tiles, cards, charts, concierge chat)
+    api/             # REST endpoints wrapping each engine, plus /api/simulate
+    page.tsx                     # marketing landing page
+    dashboard/
+      page.tsx                   # Overview
+      simulator/                 # Scenario Simulator
+      revenue/                   # Revenue & Dynamic Pricing
+      guest-experience/          # Sentiment analysis + AI concierge
+      operations/                # Predictive maintenance, staffing, inventory
+  components/        # shared UI (KPI tiles, cards, charts, concierge chat, scenario simulator)
 ```
 
 ## Possible next steps
@@ -64,3 +77,4 @@ src/
 - Swap the concierge's rule-based responder for an LLM-backed one for open-ended requests.
 - Persist bookings/reviews/inventory in a real database and accept live PMS/POS feeds.
 - Add a staffing/pricing "apply" action that writes back to a scheduling or channel-manager system.
+- Let users define custom scenarios (not just the 3 presets) from the simulator UI.

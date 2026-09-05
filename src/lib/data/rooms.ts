@@ -22,7 +22,8 @@ export const TOTAL_ROOMS = ROOM_TYPES.reduce((sum, r) => sum + r.count, 0);
 export interface DemandEvent {
   date: string; // ISO date
   label: string;
-  demandBoost: number; // multiplicative boost to base demand, e.g. 0.25 = +25%
+  demandBoost: number; // multiplicative boost to base demand, e.g. 0.25 = +25%, -0.4 = -40%
+  roomTypeId?: string; // omit to apply resort-wide, across all room types
 }
 
 export const DEMAND_EVENTS: DemandEvent[] = [

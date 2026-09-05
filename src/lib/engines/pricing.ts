@@ -1,4 +1,4 @@
-import { ROOM_TYPES, TODAY } from "../data/rooms";
+import { ROOM_TYPES, TODAY, type DemandEvent } from "../data/rooms";
 import { generateOccupancyHistory, generateDemandForecast } from "../data/bookings";
 
 export interface PriceRecommendation {
@@ -27,9 +27,9 @@ function clamp(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, n));
 }
 
-export function buildPricingRecommendations(): PricingSummary {
+export function buildPricingRecommendations(extraEvents: DemandEvent[] = []): PricingSummary {
   const history = generateOccupancyHistory();
-  const forecast = generateDemandForecast();
+  const forecast = generateDemandForecast(99, extraEvents);
   const roomById = new Map(ROOM_TYPES.map((r) => [r.id, r]));
 
   const recommendations: PriceRecommendation[] = forecast.map((f) => {
@@ -61,9 +61,14 @@ export function buildPricingRecommendations(): PricingSummary {
       }
     }
 
-    if (f.isEvent) {
-      multiplier *= 1.1;
-      rationale.push(`Local demand driver: ${f.eventLabel}`);
+    if (f.isEvent && f.eventDemandBoost !== undefined) {
+      if (f.eventDemandBoost > 0) {
+        multiplier *= 1.1;
+        rationale.push(`Local demand driver: ${f.eventLabel}`);
+      } else if (f.eventDemandBoost < 0) {
+        // Occupancy tier above already captures the softer demand - just surface the cause.
+        rationale.push(`Demand disruption: ${f.eventLabel}`);
+      }
     }
 
     multiplier = clamp(multiplier, 0.75, 1.65);

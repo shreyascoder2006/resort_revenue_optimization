@@ -17,8 +17,8 @@ function riskLevelFor(score: number): RiskLevel {
   return "Low";
 }
 
-export function buildMaintenanceRisks(): MaintenanceRisk[] {
-  const equipment = generateEquipment();
+export function buildMaintenanceRisks(forceFailureId?: string): MaintenanceRisk[] {
+  const equipment = generateEquipment(33, forceFailureId);
 
   return equipment
     .map((eq) => {

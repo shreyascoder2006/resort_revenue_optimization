@@ -163,10 +163,27 @@ function aspectSentimentBias(aspect: Aspect, daysAgo: number): number {
   return 0.25; // gentle positive baseline for everything else
 }
 
-export function generateReviews(seed = 7, count = 220): Review[] {
+export interface InjectedReview {
+  aspect: Aspect;
+  text: string;
+}
+
+export function generateReviews(seed = 7, count = 220, injected: InjectedReview[] = []): Review[] {
   const rng = makeRng(seed);
   const sources: Review["source"][] = ["Google", "TripAdvisor", "Booking.com", "Direct Survey"];
   const reviews: Review[] = [];
+
+  injected.forEach((inj, i) => {
+    reviews.push({
+      id: `rv-injected-${i + 1}`,
+      date: isoDate(TODAY),
+      source: rng.pick(sources),
+      aspect: inj.aspect,
+      text: inj.text,
+      starRating: 1,
+      guestName: rng.pick(FIRST_NAMES),
+    });
+  });
 
   for (let i = 0; i < count; i++) {
     const daysAgo = rng.int(0, HISTORY_DAYS);

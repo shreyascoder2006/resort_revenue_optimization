@@ -6,7 +6,8 @@ import { buildMaintenanceRisks } from "@/lib/engines/maintenance";
 import { buildStaffingPlan } from "@/lib/engines/staffing";
 import { buildInventoryStatus } from "@/lib/engines/inventory";
 import { generateOccupancyHistory } from "@/lib/data/bookings";
-import { AlertTriangle, MessageSquareWarning, PackageX, Users } from "lucide-react";
+import { AlertTriangle, MessageSquareWarning, PackageX, Users, Zap, ArrowRight } from "lucide-react";
+import Link from "next/link";
 
 function buildOccupancyTrend() {
   const history = generateOccupancyHistory();
@@ -70,6 +71,20 @@ export default function OverviewPage() {
         title="Resort Overview"
         description="Real-time snapshot across occupancy, revenue, guest sentiment, and operations."
       />
+
+      <Link
+        href="/dashboard/simulator"
+        className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-series-1/30 bg-series-1/5 px-4 py-3 transition-colors hover:bg-series-1/10"
+      >
+        <span className="flex items-center gap-2.5 text-sm">
+          <Zap className="h-4 w-4 shrink-0 text-series-1" strokeWidth={2} />
+          <span>
+            <span className="font-semibold text-ink">Try the Scenario Simulator</span>
+            <span className="text-ink-secondary"> - trigger a disruption and watch every engine react live.</span>
+          </span>
+        </span>
+        <ArrowRight className="h-4 w-4 shrink-0 text-series-1" strokeWidth={2} />
+      </Link>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
         <KpiTile label="Current Occupancy" value={`${Math.round(pricing.currentOccupancy * 100)}%`} />
