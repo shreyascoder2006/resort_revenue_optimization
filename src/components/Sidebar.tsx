@@ -6,10 +6,10 @@ import { LayoutDashboard, TrendingUp, MessageSquareHeart, Wrench, Palmtree } fro
 import clsx from "clsx";
 
 const NAV_ITEMS = [
-  { href: "/", label: "Overview", icon: LayoutDashboard },
-  { href: "/revenue", label: "Revenue & Pricing", icon: TrendingUp },
-  { href: "/guest-experience", label: "Guest Experience", icon: MessageSquareHeart },
-  { href: "/operations", label: "Operations", icon: Wrench },
+  { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
+  { href: "/dashboard/revenue", label: "Revenue & Pricing", icon: TrendingUp },
+  { href: "/dashboard/guest-experience", label: "Guest Experience", icon: MessageSquareHeart },
+  { href: "/dashboard/operations", label: "Operations", icon: Wrench },
 ];
 
 export default function Sidebar() {
@@ -17,13 +17,13 @@ export default function Sidebar() {
 
   return (
     <aside className="hidden md:flex w-64 shrink-0 flex-col border-r border-border-strong bg-surface px-4 py-6">
-      <div className="flex items-center gap-2 px-2 pb-6">
+      <Link href="/" className="flex items-center gap-2 px-2 pb-6">
         <Palmtree className="h-6 w-6 text-series-1" strokeWidth={2} />
         <div>
           <p className="text-sm font-semibold leading-tight">Smart Resort 360</p>
           <p className="text-xs text-ink-muted leading-tight">Operations Intelligence</p>
         </div>
-      </div>
+      </Link>
       <nav className="flex flex-col gap-1">
         {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
           const active = pathname === href;

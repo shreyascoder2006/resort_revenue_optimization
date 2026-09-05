@@ -15,7 +15,7 @@ Modern resorts split occupancy, staffing, maintenance, inventory, guest feedback
 | Operations | `lib/engines/staffing.ts` | Compares forecasted occupancy-driven staffing need against the drafted schedule per department, flagging under/overstaffed shifts. |
 | Operations | `lib/engines/inventory.ts` | Projects days-of-stock-remaining per inventory item against lead time and forecasted demand, flagging reorder points and recommended order quantities. |
 
-All five engines are exposed as JSON APIs under `src/app/api/*` and rendered across four dashboard pages (Overview, Revenue & Pricing, Guest Experience, Operations).
+All six engines are exposed as JSON APIs under `src/app/api/*` and rendered across four dashboard pages (Overview, Revenue & Pricing, Guest Experience, Operations).
 
 ## Why rule/heuristic-based "AI" instead of an LLM
 
@@ -49,7 +49,7 @@ npm run lint    # eslint
 src/
   lib/
     data/        # synthetic data generators (rooms, bookings, reviews, staff, equipment, inventory, guests)
-    engines/      # the five intelligence engines described above
+    engines/      # the six intelligence engines described above
   app/
     api/          # REST endpoints wrapping each engine
     page.tsx              # Overview
