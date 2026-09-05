@@ -12,13 +12,6 @@ interface ChatMessage {
   source?: "llm" | "rules";
 }
 
-const STARTER_PROMPTS = [
-  "Can I book a table for dinner tonight?",
-  "The wifi in my room isn't working",
-  "What activities do you recommend for tomorrow?",
-  "I'd like to request a late checkout",
-];
-
 export default function ConciergeChat() {
   const [guests, setGuests] = useState<GuestProfile[]>([]);
   const [recommendations, setRecommendations] = useState<ProactiveRecommendation[]>([]);
@@ -118,18 +111,6 @@ export default function ConciergeChat() {
           ))}
           {loading && <div className="self-start rounded-lg border border-border-strong bg-surface-raised px-3 py-2 text-sm text-ink-muted">Thinking…</div>}
         </div>
-      </div>
-
-      <div className="flex flex-wrap gap-1.5">
-        {STARTER_PROMPTS.map((p) => (
-          <button
-            key={p}
-            onClick={() => sendMessage(p)}
-            className="rounded-full border border-border-strong bg-page px-2.5 py-1 text-xs text-ink-secondary hover:bg-surface-raised"
-          >
-            {p}
-          </button>
-        ))}
       </div>
 
       <form
