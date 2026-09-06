@@ -55,3 +55,25 @@ export function generateEquipment(seed = 33, forceFailureId?: string): Equipment
     };
   });
 }
+
+export interface EquipmentRoomImpact {
+  equipmentId: string;
+  roomTypeId: string;
+  affectedRoomCount: number;
+  affectedRoomIds: string[]; // Deterministic list of specific room IDs
+  description: string;
+}
+
+export const EQUIPMENT_ROOM_MAPPINGS: Record<string, EquipmentRoomImpact> = {
+  "eq-2": {
+    equipmentId: "eq-2",
+    roomTypeId: "deluxe-ocean",
+    affectedRoomCount: 15,
+    affectedRoomIds: Array.from({ length: 15 }, (_, i) => `deluxe-ocean-${201 + i}`),
+    description: "Chiller Unit 2 failure takes 15 Deluxe Ocean View rooms offline due to loss of HVAC cooling.",
+  },
+};
+
+export function getEquipmentAffectedRooms(equipmentId: string): EquipmentRoomImpact | undefined {
+  return EQUIPMENT_ROOM_MAPPINGS[equipmentId];
+}

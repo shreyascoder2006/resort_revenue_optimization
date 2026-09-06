@@ -209,3 +209,4 @@ export function generateReviews(seed = 7, count = 220, injected: InjectedReview[
 
   return reviews.sort((a, b) => (a.date < b.date ? 1 : -1));
 }
+

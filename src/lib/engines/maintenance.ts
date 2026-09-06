@@ -1,4 +1,5 @@
 import { generateEquipment, type Equipment } from "../data/equipment";
+import type { ResortState } from "../store/resortStore";
 
 export type RiskLevel = "Low" | "Medium" | "High" | "Critical";
 
@@ -17,8 +18,9 @@ function riskLevelFor(score: number): RiskLevel {
   return "Low";
 }
 
-export function buildMaintenanceRisks(forceFailureId?: string): MaintenanceRisk[] {
-  const equipment = generateEquipment(33, forceFailureId);
+export function buildMaintenanceRisks(stateOrId?: ResortState | string): MaintenanceRisk[] {
+  const isState = stateOrId && typeof stateOrId === "object" && "equipment" in stateOrId;
+  const equipment = isState ? stateOrId.equipment : generateEquipment(33, typeof stateOrId === "string" ? stateOrId : undefined);
 
   return equipment
     .map((eq) => {

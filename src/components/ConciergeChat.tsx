@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Send, Sparkles } from "lucide-react";
+import { Send, Sparkles, Zap } from "lucide-react";
 import type { GuestProfile } from "@/lib/data/guests";
 import type { ProactiveRecommendation } from "@/lib/engines/concierge";
 
@@ -19,6 +19,7 @@ export default function ConciergeChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [fastMode, setFastMode] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -45,7 +46,7 @@ export default function ConciergeChat() {
       const res = await fetch("/api/concierge", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, guestId }),
+        body: JSON.stringify({ message: text, guestId, mode: fastMode ? "instant" : "auto" }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -64,25 +65,41 @@ export default function ConciergeChat() {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <label className="text-xs font-medium text-ink-muted" htmlFor="guest-select">
-          Guest
-        </label>
-        <select
-          id="guest-select"
-          value={guestId}
-          onChange={(e) => {
-            setGuestId(e.target.value);
-            setMessages([]);
-          }}
-          className="rounded-md border border-border-strong bg-surface-raised px-2 py-1 text-sm"
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <label className="text-xs font-medium text-ink-muted" htmlFor="guest-select">
+            Guest
+          </label>
+          <select
+            id="guest-select"
+            value={guestId}
+            onChange={(e) => {
+              setGuestId(e.target.value);
+              setMessages([]);
+            }}
+            className="rounded-md border border-border-strong bg-surface-raised px-2 py-1 text-sm"
+          >
+            {guests.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name} ({g.loyaltyTier})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setFastMode(!fastMode)}
+          className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+            fastMode
+              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
+              : "border-border-strong bg-surface-raised text-ink-secondary hover:text-ink"
+          }`}
+          title={fastMode ? "Instant mode: Sub-millisecond deterministic engine" : "AI mode: Gemini LLM"}
         >
-          {guests.map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.name} ({g.loyaltyTier})
-            </option>
-          ))}
-        </select>
+          <Zap className="h-3 w-3" />
+          {fastMode ? "Instant Mode (0ms)" : "AI Mode"}
+        </button>
       </div>
 
       {activeRec && (

@@ -1,5 +1,6 @@
 import Sidebar from "@/components/Sidebar";
 import MobileNav from "@/components/MobileNav";
+import LiveEventBanner from "@/components/LiveEventBanner";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -7,7 +8,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <Sidebar />
       <div className="flex-1 min-w-0 flex flex-col">
         <MobileNav />
-        <main className="flex-1 min-w-0 px-4 py-6 md:px-10 md:py-8">{children}</main>
+        <main className="flex-1 min-w-0 px-4 py-6 md:px-10 md:py-8">
+          <LiveEventBanner />
+          {children}
+        </main>
       </div>
     </div>
   );

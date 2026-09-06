@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { message, guestId } = (body ?? {}) as { message?: unknown; guestId?: unknown };
+  const { message, guestId, mode } = (body ?? {}) as { message?: unknown; guestId?: unknown; mode?: unknown };
 
   if (typeof message !== "string" || message.trim().length === 0) {
     return NextResponse.json({ error: "'message' is required" }, { status: 400 });
@@ -29,6 +29,10 @@ export async function POST(request: Request) {
   }
 
   const validGuestId = typeof guestId === "string" && GUEST_PROFILES.some((g) => g.id === guestId) ? guestId : undefined;
+
+  if (mode === "instant") {
+    return NextResponse.json(handleConciergeMessage(message, validGuestId));
+  }
 
   const response =
     (await handleConciergeMessageGemini(message, validGuestId)) ??

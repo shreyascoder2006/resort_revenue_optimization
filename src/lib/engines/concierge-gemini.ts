@@ -1,4 +1,4 @@
-import { GoogleGenAI, ApiError, Type, type Schema } from "@google/genai";
+import { GoogleGenAI, ApiError, Type, ThinkingLevel, type Schema } from "@google/genai";
 import { INTENT_VALUES, buildConciergeSystemPrompt, findGuest } from "./concierge-prompt";
 import type { ConciergeResponse, Intent } from "./concierge";
 
@@ -25,10 +25,12 @@ interface ParsedConciergeReply {
 }
 
 let cachedClient: GoogleGenAI | null = null;
+let quotaExhaustedUntil = 0;
 
 function getClient(): GoogleGenAI | null {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return null;
+  if (Date.now() < quotaExhaustedUntil) return null;
   if (!cachedClient) cachedClient = new GoogleGenAI({ apiKey });
   return cachedClient;
 }
@@ -38,7 +40,12 @@ function isKnownIntent(value: string): value is Intent {
 }
 
 function isTransient(error: unknown): boolean {
-  return error instanceof ApiError && (error.status === 503 || error.status === 429);
+  if (!(error instanceof ApiError)) return false;
+  const msg = (error.message || "").toLowerCase();
+  if (msg.includes("quota") || msg.includes("resource_exhausted") || msg.includes("limit: 20")) {
+    return false;
+  }
+  return error.status === 503 || error.status === 429;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -67,7 +74,10 @@ export async function handleConciergeMessageGemini(message: string, guestId?: st
           systemInstruction: buildConciergeSystemPrompt(guest),
           responseMimeType: "application/json",
           responseSchema: RESPONSE_SCHEMA,
-          maxOutputTokens: 1024,
+          maxOutputTokens: 350,
+          thinkingConfig: {
+            thinkingLevel: ThinkingLevel.MINIMAL,
+          },
         },
       });
 
@@ -88,6 +98,10 @@ export async function handleConciergeMessageGemini(message: string, guestId?: st
       if (attempt === 0 && isTransient(error)) {
         await sleep(600);
         continue;
+      }
+      const isQuota = error instanceof ApiError && (error.message || "").toLowerCase().includes("quota");
+      if (isQuota) {
+        quotaExhaustedUntil = Date.now() + 60_000;
       }
       console.error("Concierge Gemini call failed, falling back:", error);
       return null;

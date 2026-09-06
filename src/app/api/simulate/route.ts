@@ -13,5 +13,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: `Unknown scenario '${scenarioId}'` }, { status: 400 });
   }
 
-  return NextResponse.json(runScenario(scenarioId));
+  const boostParam = searchParams.get("boost");
+  const boost = boostParam ? parseFloat(boostParam) : undefined;
+
+  return NextResponse.json(runScenario(scenarioId, boost));
 }

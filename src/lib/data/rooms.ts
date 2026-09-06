@@ -6,6 +6,19 @@ export interface RoomType {
   count: number;
   baseRate: number; // USD/night
   maxOccupancy: number;
+  availableCount?: number;
+  outOfOrderCount?: number;
+}
+
+export type RoomStatus = "AVAILABLE" | "OUT_OF_ORDER";
+
+export interface Room {
+  id: string; // e.g. "deluxe-ocean-201"
+  roomNumber: string; // "201"
+  roomTypeId: string; // "deluxe-ocean"
+  status: RoomStatus;
+  affectedByEquipmentId?: string;
+  outOfOrderReason?: string;
 }
 
 export const ROOM_TYPES: RoomType[] = [
@@ -15,6 +28,43 @@ export const ROOM_TYPES: RoomType[] = [
   { id: "garden-bungalow", name: "Garden Bungalow", count: 20, baseRate: 300, maxOccupancy: 3 },
   { id: "presidential-villa", name: "Presidential Villa", count: 5, baseRate: 850, maxOccupancy: 6 },
 ];
+
+export function generateRooms(): Room[] {
+  const rooms: Room[] = [];
+  const startNumbers: Record<string, number> = {
+    standard: 101,
+    "deluxe-ocean": 201,
+    "family-suite": 301,
+    "garden-bungalow": 401,
+    "presidential-villa": 501,
+  };
+
+  for (const rt of ROOM_TYPES) {
+    const start = startNumbers[rt.id] ?? 101;
+    for (let i = 0; i < rt.count; i++) {
+      const roomNum = (start + i).toString();
+      rooms.push({
+        id: `${rt.id}-${roomNum}`,
+        roomNumber: roomNum,
+        roomTypeId: rt.id,
+        status: "AVAILABLE",
+      });
+    }
+  }
+  return rooms;
+}
+
+export function syncRoomTypesWithRooms(roomTypes: RoomType[], rooms: Room[]): RoomType[] {
+  return roomTypes.map((rt) => {
+    const ofType = rooms.filter((r) => r.roomTypeId === rt.id);
+    const outOfOrder = ofType.filter((r) => r.status === "OUT_OF_ORDER").length;
+    return {
+      ...rt,
+      outOfOrderCount: outOfOrder,
+      availableCount: rt.count - outOfOrder,
+    };
+  });
+}
 
 export const TOTAL_ROOMS = ROOM_TYPES.reduce((sum, r) => sum + r.count, 0);
 

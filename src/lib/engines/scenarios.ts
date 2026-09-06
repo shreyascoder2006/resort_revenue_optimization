@@ -61,9 +61,9 @@ export const SCENARIOS: ScenarioDefinition[] = [
     icon: "wrench",
   },
   {
-    id: "group-cancel",
-    label: "Group Cancels + Bad Reviews",
-    description: "A family-suite group cancels last-minute while negative \"value\" reviews start appearing.",
+    id: "guest-complaint",
+    label: "Guest Complaint Traced to Root Cause",
+    description: "A VIP guest complaint about lukewarm spa water triggers automated root-cause diagnostics, maintenance work orders, and service recovery.",
     icon: "trending-down",
   },
 ];
@@ -74,10 +74,11 @@ function avgOnDate(recs: PriceRecommendation[], date: string, key: "recommendedR
   return rows.reduce((s, r) => s + r[key], 0) / rows.length;
 }
 
-function runFestivalScenario(): ScenarioOutcome {
+function runFestivalScenario(customBoost?: number): ScenarioOutcome {
   const def = SCENARIOS[0];
   const eventDate = isoDate(addDays(TODAY, 2));
-  const event: DemandEvent = { date: eventDate, label: def.label, demandBoost: 0.55 };
+  const boost = customBoost ?? 0.20;
+  const event: DemandEvent = { date: eventDate, label: def.label, demandBoost: boost };
 
   const pricingBefore = buildPricingRecommendations();
   const staffingBefore = buildStaffingPlan();
@@ -207,33 +208,57 @@ function runEquipmentFailureScenario(): ScenarioOutcome {
       key: "trigger",
       icon: "zap",
       title: def.label,
-      detail: `${targetBefore.equipment.name} (${targetBefore.equipment.location}) sensor readings spike overnight.`,
+      detail: `${targetBefore.equipment.name} (${targetBefore.equipment.location}) compressor failure takes 15 Deluxe Ocean rooms offline.`,
     },
     {
-      key: "maintenance",
-      icon: "maintenance",
-      title: "Maintenance engine re-scores risk",
-      detail: `Risk score jumps from ${targetBefore.riskScore} (${targetBefore.riskLevel}) to ${targetAfter.riskScore} (${targetAfter.riskLevel}).`,
+      key: "pricing",
+      icon: "pricing",
+      title: "Revenue engine adapts to capacity constraint",
+      detail: "Operational rooms drop from 150 to 135. Dynamic pricing automatically activates scarcity multipliers on remaining Deluxe Ocean inventory.",
+    },
+    {
+      key: "inventory",
+      icon: "inventory",
+      title: "Spare parts depleted & burn rate accelerates",
+      detail: "Emergency repairs consume 15 HVAC filters and 8 cylinders of refrigerant. 3.0x accelerated burn rate triggers critical reorder alerts.",
     },
     {
       key: "sentiment",
       icon: "sentiment",
-      title: "Sentiment engine catches guest impact",
-      detail: `${injected.length} new reviews mentioning heat and AC come in overnight - "room comfort" sentiment drops from ${aspectBefore.avgScore.toFixed(2)} to ${aspectAfter.avgScore.toFixed(2)}.`,
+      title: "Sentiment plunge & automated service recovery",
+      detail: 'AC complaints arrive overnight. Room comfort sentiment plunges; system queues 15x $75 resort credits and complimentary spa passes.',
     },
     {
       key: "summary",
       icon: "check",
-      title: "Impact summary",
-      detail: "One equipment fault is now linked to a guest-experience risk before it shows up on review sites.",
+      title: "End-to-end resort-wide ripple complete",
+      detail: "Every engine (Maintenance, Inventory, Revenue, and Guest Experience) automatically coordinated responses across departments.",
     },
   ];
 
   const kpis: ScenarioKpi[] = [
     {
+      label: "Operational room capacity",
+      before: "150 / 150 (100%)",
+      after: "135 / 150 (90%)",
+      good: false,
+    },
+    {
       label: `${targetBefore.equipment.name} risk score`,
       before: `${targetBefore.riskScore} (${targetBefore.riskLevel})`,
       after: `${targetAfter.riskScore} (${targetAfter.riskLevel})`,
+      good: false,
+    },
+    {
+      label: "Deluxe Ocean avg rate",
+      before: "$246",
+      after: "$306 (Scarcity)",
+      good: true,
+    },
+    {
+      label: "Critical maintenance inventory",
+      before: "Healthy (45 pcs / 14 cyl)",
+      after: "Critical (30 pcs / 6 cyl)",
       good: false,
     },
     {
@@ -247,9 +272,12 @@ function runEquipmentFailureScenario(): ScenarioOutcome {
   const newestIssue = sentimentAfter.topIssues.find((i) => i.aspect === "room comfort");
 
   const alerts: ScenarioAlert[] = [
+    { engine: "Revenue", variant: "critical", text: "15 Deluxe Ocean rooms offline: Available capacity down 10%; scarcity rate adjustments active." },
     { engine: "Maintenance", variant: "critical", text: targetAfter.recommendation },
+    { engine: "Inventory", variant: "critical", text: "Chiller Refrigerant (6 cyl) and HVAC Filters (30 pcs) in Critical shortage: Immediate replenishment required." },
+    { engine: "Guest Experience", variant: "serious", text: "Automated service recovery: $75 resort credit + spa day pass dispatched to 15 affected guests." },
     ...(newestIssue
-      ? [{ engine: "Guest Experience", variant: "serious" as const, text: `New guest complaint: "${newestIssue.quote}"` }]
+      ? [{ engine: "Guest Experience", variant: "serious" as const, text: `Active review alert: "${newestIssue.quote}"` }]
       : []),
   ];
 
@@ -338,12 +366,121 @@ function runGroupCancelScenario(): ScenarioOutcome {
   return { id: def.id, label: def.label, description: def.description, steps, kpis, alerts };
 }
 
-export function runScenario(id: string): ScenarioOutcome {
+function runGuestComplaintScenario(): ScenarioOutcome {
+  const def = SCENARIOS.find((s) => s.id === "guest-complaint") ?? {
+    id: "guest-complaint",
+    label: "Guest Complaint Traced to Root Cause",
+    description: "A VIP guest complaint about lukewarm spa water triggers automated root-cause diagnostics, maintenance work orders, and service recovery.",
+    icon: "trending-down" as const,
+  };
+
+  const steps: ScenarioStep[] = [
+    {
+      key: "trigger",
+      icon: "sentiment",
+      title: "1. VIP Guest Complaint Received",
+      detail: "Elena Rostova (Platinum VIP, Room 209) files 1-star incident: Spa Jacuzzi water lukewarm, jet pressure cut out mid-session, burning odor from pump room.",
+    },
+    {
+      key: "sentiment",
+      icon: "sentiment",
+      title: "2. Sentiment Plunges",
+      detail: "\"Spa\" aspect score drops from +0.68 to -0.45 (-1.13 pts). Incident escalated to top priority in Guest Experience feed.",
+    },
+    {
+      key: "maintenance",
+      icon: "maintenance",
+      title: "3. Root Cause Identified via Telemetry",
+      detail: "Automated correlation identifies Spa Jacuzzi Heater (eq-6) anomaly score (88%) and tripped thermal heating element (96% diagnostic confidence).",
+    },
+    {
+      key: "ops",
+      icon: "staffing",
+      title: "4. Maintenance Alert & Work Order Dispatched",
+      detail: "Emergency Work Order WO-4182 dispatched to Facilities & Thermal Systems (Priority: Critical, ETA: 2 hours).",
+    },
+    {
+      key: "area",
+      icon: "inventory",
+      title: "5. Affected Area Flagged",
+      detail: "Spa Hydrotherapy Wing flagged as CLOSED FOR REPAIR; 12 scheduled private sessions paused.",
+    },
+    {
+      key: "recovery",
+      icon: "check",
+      title: "6. Revenue & Service Recovery Executed",
+      detail: "$75 resort credit + 5,000 loyalty points + treatment refund dispatched to guest. -$1,400 daily ancillary revenue protected/paused.",
+    },
+  ];
+
+  const kpis: ScenarioKpi[] = [
+    {
+      label: "Spa Aspect Sentiment",
+      before: "+0.68",
+      after: "-0.45",
+      good: false,
+    },
+    {
+      label: "Root Cause Correlation",
+      before: "Undetected",
+      after: "Spa Jacuzzi Heater (eq-6)",
+      good: true,
+    },
+    {
+      label: "Hydrotherapy Wing Status",
+      before: "OPERATIONAL",
+      after: "CLOSED FOR REPAIR",
+      good: false,
+    },
+    {
+      label: "Service Recovery Comp",
+      before: "$0",
+      after: "$75 Credit + 5k pts",
+      good: true,
+    },
+    {
+      label: "Daily Ancillary Yield Impact",
+      before: "$0",
+      after: "-$1,400",
+      good: false,
+    },
+  ];
+
+  const alerts: ScenarioAlert[] = [
+    {
+      engine: "Guest Experience",
+      variant: "critical",
+      text: "VIP Incident: Elena Rostova complaint on Spa Hydrotherapy; sentiment dropped to -0.45.",
+    },
+    {
+      engine: "Maintenance",
+      variant: "critical",
+      text: "Emergency Work Order WO-4182 dispatched for Spa Jacuzzi Heater (eq-6) heating element replacement.",
+    },
+    {
+      engine: "Operations",
+      variant: "warning",
+      text: "Spa Hydrotherapy Wing flagged CLOSED FOR REPAIR — 12 guest sessions paused.",
+    },
+    {
+      engine: "Overview",
+      variant: "critical",
+      text: "Executive Alert: Guest complaint correlated to equipment root cause; facilities dispatched and service recovery issued.",
+    },
+  ];
+
+  return { id: def.id, label: def.label, description: def.description, steps, kpis, alerts };
+}
+
+export function runScenario(id: string, boost?: number): ScenarioOutcome {
   switch (id) {
     case "festival":
-      return runFestivalScenario();
+      return runFestivalScenario(boost);
     case "equipment-failure":
+    case "chiller":
       return runEquipmentFailureScenario();
+    case "guest-complaint":
+      return runGuestComplaintScenario();
     case "group-cancel":
       return runGroupCancelScenario();
     default:

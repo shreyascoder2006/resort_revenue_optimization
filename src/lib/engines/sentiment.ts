@@ -1,4 +1,5 @@
 import { generateReviews, type Review, type Aspect, type InjectedReview } from "../data/reviews";
+import type { ResortState } from "../store/resortStore";
 
 const POSITIVE_WORDS = [
   "amazing", "outstanding", "excellent", "wonderful", "fantastic", "great", "fresh", "flavorful",
@@ -12,7 +13,7 @@ const NEGATIVE_WORDS = [
   "limited", "loud", "thin", "ruined", "dropping", "unusable", "painfully", "long", "wasn't",
   "hadn't", "musty", "stains", "dust", "mess", "rushed", "overbooked", "understaffed", "crowded",
   "questionable", "lumpy", "uncomfortable", "cramped", "outdated", "issue", "issues", "poor",
-  "waited", "delay",
+  "waited", "delay", "broken", "breakdown", "failed", "failure", "terrible", "unbearably",
 ];
 
 export interface AspectSentiment {
@@ -43,6 +44,13 @@ export interface SentimentSummary {
   weekly: WeeklySentimentPoint[];
   byAspect: AspectSentiment[];
   topIssues: SentimentIssue[];
+  serviceRiskLevel: "Normal" | "Elevated" | "High";
+  serviceRiskDetail?: string;
+  hasEquipmentFailure?: boolean;
+  activeEquipmentFailureName?: string;
+  activeOutOfOrderCount?: number;
+  recoveryRecommendation?: string;
+  affectedGuestCompCount?: number;
 }
 
 function scoreText(text: string): number {
@@ -70,9 +78,44 @@ function weekStartOf(dateIso: string): string {
   return d.toISOString().slice(0, 10);
 }
 
-export function buildSentimentSummary(injectedReviews: InjectedReview[] = []): SentimentSummary {
-  const reviews = generateReviews(7, 220, injectedReviews);
+export function buildSentimentSummary(stateOrInjected?: ResortState | InjectedReview[]): SentimentSummary {
+  const isState = stateOrInjected && !Array.isArray(stateOrInjected) && "reviews" in stateOrInjected;
+  const reviews = isState ? stateOrInjected.reviews : generateReviews(7, 220, Array.isArray(stateOrInjected) ? stateOrInjected : []);
   const scored = reviews.map((r) => ({ ...r, score: scoreText(r.text) }));
+
+  // Check if there is an active demand surge or equipment failure straining service
+  let serviceRiskLevel: "Normal" | "Elevated" | "High" = "Normal";
+  let serviceRiskDetail: string | undefined;
+  let hasEquipmentFailure = false;
+  let activeEquipmentFailureName: string | undefined;
+  let activeOutOfOrderCount = 0;
+  let recoveryRecommendation: string | undefined;
+  let affectedGuestCompCount = 0;
+
+  if (isState) {
+    const surgeEvent = stateOrInjected.activeEvents.find((e) => e.type === "DEMAND_SURGE");
+    const failureEvent = stateOrInjected.activeEvents.find((e) => e.type === "EQUIPMENT_FAILURE");
+
+    if (failureEvent) {
+      hasEquipmentFailure = true;
+      activeEquipmentFailureName = (failureEvent.details?.equipmentName as string) ?? "Equipment";
+      activeOutOfOrderCount = (failureEvent.details?.affectedRoomCount as number) ?? 15;
+      affectedGuestCompCount = activeOutOfOrderCount;
+      serviceRiskLevel = "High";
+
+      recoveryRecommendation = `Deploy automated service recovery for ${activeOutOfOrderCount} affected Deluxe Ocean guests: $75 resort credit + complimentary spa day pass per room ($${(activeOutOfOrderCount * 75).toLocaleString()} total recovery budget).`;
+
+      if (surgeEvent) {
+        serviceRiskDetail = `CRITICAL COMPOUND RISK: ${activeEquipmentFailureName} failure offline during ${surgeEvent.label}. Climate control lost in ${activeOutOfOrderCount} rooms while front desk and dining queues peak. Proactive compensation required.`;
+      } else {
+        serviceRiskDetail = `ACTIVE CLIMATE DISRUPTION: ${activeEquipmentFailureName} failure disabled cooling across ${activeOutOfOrderCount} rooms. Room comfort sentiment sharply degraded; proactive service recovery ($75 credit + spa pass) recommended.`;
+      }
+    } else if (surgeEvent) {
+      const boost = (surgeEvent.details?.demandBoost as number) ?? 0.2;
+      serviceRiskLevel = boost >= 0.25 ? "High" : "Elevated";
+      serviceRiskDetail = `Upcoming ${surgeEvent.label} is forecasted to exceed standard staffing thresholds, creating high risk for check-in delays, dining queues, and housekeeping backlogs.`;
+    }
+  }
 
   const overallScore = avg(scored.map((r) => r.score));
   const overallStars = avg(scored.map((r) => r.starRating));
@@ -109,7 +152,7 @@ export function buildSentimentSummary(injectedReviews: InjectedReview[] = []): S
   const seenQuotes = new Set<string>();
   const topIssues: SentimentIssue[] = scored
     .filter((r) => r.score < 0)
-    .sort((a, b) => a.score - b.score)
+    .sort((a, b) => (a.score === b.score ? (a.date < b.date ? 1 : -1) : a.score - b.score))
     .filter((r) => {
       if (seenQuotes.has(r.text)) return false;
       seenQuotes.add(r.text);
@@ -125,6 +168,13 @@ export function buildSentimentSummary(injectedReviews: InjectedReview[] = []): S
     weekly,
     byAspect: byAspect.sort((a, b) => a.avgScore - b.avgScore),
     topIssues,
+    serviceRiskLevel,
+    serviceRiskDetail,
+    hasEquipmentFailure,
+    activeEquipmentFailureName,
+    activeOutOfOrderCount,
+    recoveryRecommendation,
+    affectedGuestCompCount,
   };
 }
 
