@@ -7,6 +7,8 @@ export interface Series {
   key: string;
   label: string;
   color: string;
+  strokeDasharray?: string;
+  connectNulls?: boolean;
 }
 
 export function LineTrendChart({
@@ -16,7 +18,7 @@ export function LineTrendChart({
   height = 260,
   zeroLine = false,
 }: {
-  data: Record<string, string | number>[];
+  data: Record<string, string | number | undefined>[];
   series: Series[];
   format?: ChartFormat;
   height?: number;
@@ -60,6 +62,8 @@ export function LineTrendChart({
             name={s.label}
             stroke={s.color}
             strokeWidth={2}
+            strokeDasharray={s.strokeDasharray}
+            connectNulls={s.connectNulls ?? false}
             dot={false}
             activeDot={{ r: 4 }}
           />

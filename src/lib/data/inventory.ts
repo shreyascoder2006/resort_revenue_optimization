@@ -24,6 +24,7 @@ const ITEM_TEMPLATES: Array<Omit<InventoryItem, "id" | "currentStock">> = [
   { name: "Pool Chlorine Tablets", category: "Maintenance", unit: "kg", parLevel: 120, avgDailyConsumption: 6, leadTimeDays: 9, unitCost: 5.6 },
   { name: "HVAC Air Filters", category: "Maintenance", unit: "pcs", parLevel: 60, avgDailyConsumption: 1.5, leadTimeDays: 12, unitCost: 18 },
   { name: "Chiller Refrigerant (R-410A)", category: "Maintenance", unit: "cylinders", parLevel: 18, avgDailyConsumption: 0.6, leadTimeDays: 8, unitCost: 110 },
+  { name: "Backup Generator Fuel & Breakers", category: "Maintenance", unit: "sets", parLevel: 40, avgDailyConsumption: 0.8, leadTimeDays: 6, unitCost: 85 },
 ];
 
 export interface EquipmentPartsRequirement {
@@ -43,6 +44,13 @@ export const EQUIPMENT_PARTS_CONSUMPTION: Record<string, EquipmentPartsRequireme
       { itemName: "HVAC Air Filters", quantityConsumed: 15, reason: "Emergency air filter replacements across offline Deluxe Ocean wing" },
     ],
   },
+  "eq-11": {
+    equipmentId: "eq-11",
+    parts: [
+      { itemName: "Backup Generator Fuel & Breakers", quantityConsumed: 32, reason: "Emergency substation power transfer & switchgear repair" },
+      { itemName: "HVAC Air Filters", quantityConsumed: 22, reason: "Surge ventilation filter replacement across Ocean & Lagoon wings" },
+    ],
+  },
 };
 
 export function getEquipmentPartsConsumption(equipmentId: string): EquipmentPartsRequirement | undefined {
@@ -54,9 +62,9 @@ export function generateInventory(seed = 51): InventoryItem[] {
   return ITEM_TEMPLATES.map((t, idx) => {
     // Bias some items toward being low on stock right now to create real reorder alerts.
     // Ensure maintenance spare parts start in a healthy operational stock range at baseline.
-    const isMaintenancePart = t.name.includes("HVAC") || t.name.includes("Refrigerant");
+    const isMaintenancePart = t.name.includes("HVAC") || t.name.includes("Refrigerant") || t.name.includes("Generator");
     const stockBias = isMaintenancePart
-      ? 0.75 // Healthy baseline stock (e.g. 45 filters out of 60, 14 cylinders out of 18)
+      ? 0.80 // Healthy baseline stock (e.g. 48 filters out of 60, 15 cylinders, 32 breaker sets)
       : idx % 4 === 0
       ? rng.range(0.15, 0.35)
       : rng.range(0.45, 1.05);

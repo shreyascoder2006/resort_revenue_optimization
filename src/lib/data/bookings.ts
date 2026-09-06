@@ -52,7 +52,7 @@ export function generateOccupancyHistory(seed = 42): DailyOccupancy[] {
     for (let i = HISTORY_DAYS; i >= 1; i--) {
       const date = addDays(TODAY, -i);
       const dateIso = isoDate(date);
-      const base = 0.62 * roomPersonality;
+      const base = 0.36 * roomPersonality;
       const rate = clamp01(
         base * seasonalFactor(HISTORY_DAYS - i) * weekdayFactor(date) * rng.range(0.92, 1.08)
       );
@@ -73,7 +73,7 @@ export function generateOccupancyHistory(seed = 42): DailyOccupancy[] {
 }
 
 function dynamicHistoricalAdr(room: RoomType, occupancyRate: number, rng: ReturnType<typeof makeRng>) {
-  const demandAdj = occupancyRate > 0.8 ? 1.15 : occupancyRate < 0.45 ? 0.9 : 1.0;
+  const demandAdj = occupancyRate > 0.8 ? 1.35 : occupancyRate < 0.45 ? 0.92 : 1.0;
   return Math.round(room.baseRate * demandAdj * rng.range(0.96, 1.04));
 }
 
@@ -91,12 +91,22 @@ export function generateDemandForecast(seed = 99, extraEvents: DemandEvent[] = [
       const date = addDays(TODAY, i);
       const dateIso = isoDate(date);
       const event = eventFor(dateIso, room.id, extraEvents);
-      const base = 0.6 * roomPersonality;
+      const base = 0.36 * roomPersonality;
       let finalRate = clamp01(base * weekdayFactor(date) * rng.range(0.95, 1.05));
-      if (event) finalRate = clamp01(finalRate * (1 + event.demandBoost));
+      if (event) {
+        if (event.demandBoost > 0) {
+          // Surge events (like Surprise Festival) create an intense booking shockwave
+          // boosting occupancy straight into peak territory (95%-98%)
+          finalRate = clamp01(Math.min(0.97, finalRate + event.demandBoost * 0.55));
+        } else {
+          finalRate = clamp01(finalRate * (1 + event.demandBoost));
+        }
+      }
 
-      // Pickup curve: rooms already booked "on the books" shrink as lead time grows.
-      const pickupShare = clamp01(1 - i / (FORECAST_DAYS + 6) - rng.range(0, 0.05));
+      // Pickup curve: rooms already booked "on the books"
+      // Surge events trigger immediate booking rushes with near-instant pickup
+      const eventPickupLift = event && event.demandBoost > 0 ? 0.35 : 0;
+      const pickupShare = clamp01(1 - i / (FORECAST_DAYS + 6) - rng.range(0, 0.05) + eventPickupLift);
       const bookedRooms = Math.round(finalRate * room.count * pickupShare);
 
       rows.push({

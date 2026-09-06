@@ -12,6 +12,10 @@ import {
   CheckCircle2,
   Play,
   RotateCcw,
+  Flame,
+  Sparkles,
+  CloudRain,
+  AlertTriangle,
 } from "lucide-react";
 import clsx from "clsx";
 import { Card, StatusBadge } from "@/components/ui";
@@ -19,8 +23,11 @@ import type { ScenarioDefinition, ScenarioOutcome, ScenarioIcon, StepIcon, Alert
 import { useResortStore } from "@/lib/store/resortStore";
 
 const SCENARIO_ICONS: Record<ScenarioIcon, typeof Zap> = {
-  zap: Zap,
+  zap: Flame,
+  sparkles: Sparkles,
+  "cloud-rain": CloudRain,
   wrench: Wrench,
+  "alert-triangle": AlertTriangle,
   "trending-down": TrendingDown,
 };
 
@@ -47,7 +54,7 @@ export default function ScenarioSimulator() {
   const { state, dispatch } = useResortStore();
   const [scenarios, setScenarios] = useState<ScenarioDefinition[]>([]);
   const [selectedId, setSelectedId] = useState<string>("festival");
-  const [demandBoost, setDemandBoost] = useState<number>(0.2);
+  const [demandBoost, setDemandBoost] = useState<number>(1.0);
   const [outcome, setOutcome] = useState<ScenarioOutcome | null>(null);
   const [running, setRunning] = useState(false);
   const [revealedCount, setRevealedCount] = useState(0);
@@ -77,12 +84,73 @@ export default function ScenarioSimulator() {
     };
   }, []);
 
+  function applyScenarioToStore(id: string) {
+    // Reset state before applying a new scenario to avoid compound state
+    dispatch({ type: "RESET_STATE" });
+
+    setTimeout(() => {
+      if (id === "festival") {
+        dispatch({
+          type: "DEMAND_SURGE",
+          demandBoost: demandBoost || 1.2,
+          reason: "Surprise Mega Festival",
+          durationDays: 3,
+          startDateOffset: 1,
+        });
+      } else if (id === "wedding-buyout") {
+        dispatch({
+          type: "DEMAND_SURGE",
+          demandBoost: 1.5,
+          reason: "VIP Royal Wedding Buyout",
+          durationDays: 3,
+          startDateOffset: 1,
+        });
+      } else if (id === "monsoon-slump") {
+        dispatch({
+          type: "DEMAND_SURGE",
+          demandBoost: -0.70,
+          reason: "Monsoon Cyclonic Alert",
+          durationDays: 4,
+          startDateOffset: 1,
+        });
+      } else if (id === "wing-blackout") {
+        dispatch({
+          type: "EQUIPMENT_FAILURE",
+          equipmentId: "eq-11",
+          reason: "Main Substation failure: 40 rooms offline across Deluxe Ocean & Lagoon wings",
+        });
+      } else if (id === "equipment-failure" || id === "chiller") {
+        dispatch({
+          type: "EQUIPMENT_FAILURE",
+          equipmentId: "eq-2",
+          reason: "Chiller Unit 2 failure: loss of cooling to Deluxe Ocean wing",
+        });
+      } else if (id === "guest-complaint") {
+        dispatch({
+          type: "GUEST_COMPLAINT",
+          complaintId: "cmp-spa-101",
+          aspect: "spa",
+          guestName: "Elena Rostova",
+          roomNumber: "209",
+          facilityArea: "Spa Hydrotherapy Wing",
+          complaintText:
+            "The Spa Jacuzzi water was lukewarm, jet pressure cut out completely mid-session, and there was a distinct electrical burning odor from the pump room. Completely ruined our booked private couples session!",
+          targetEquipmentId: "eq-6",
+          targetEquipmentName: "Spa Jacuzzi Heater",
+          severity: "critical",
+        });
+      }
+      setJustApplied(true);
+    }, 0);
+  }
+
   function pickScenario(id: string) {
     if (running) return;
     setSelectedId(id);
     setOutcome(null);
     setRevealedCount(0);
     setError(null);
+    applyScenarioToStore(id);
   }
 
   const [justApplied, setJustApplied] = useState(false);
@@ -101,7 +169,7 @@ export default function ScenarioSimulator() {
     }
   }
 
-  async function runSimulation(applyLive: boolean = true) {
+  async function runSimulation() {
     if (!selectedId || running) return;
     timeouts.current.forEach(clearTimeout);
     timeouts.current = [];
@@ -109,42 +177,9 @@ export default function ScenarioSimulator() {
     setOutcome(null);
     setRevealedCount(0);
     setError(null);
-    setJustApplied(false);
 
-    if (applyLive) {
-      if (selectedId === "festival") {
-        dispatch({
-          type: "DEMAND_SURGE",
-          demandBoost,
-          reason: "Surprise Festival",
-          durationDays: 2,
-          startDateOffset: 2,
-        });
-        setJustApplied(true);
-      } else if (selectedId === "equipment-failure" || selectedId === "chiller") {
-        dispatch({
-          type: "EQUIPMENT_FAILURE",
-          equipmentId: "eq-2",
-          reason: "Chiller Unit 2 failure: loss of cooling to Deluxe Ocean wing",
-        });
-        setJustApplied(true);
-      } else if (selectedId === "guest-complaint") {
-        dispatch({
-          type: "GUEST_COMPLAINT",
-          complaintId: "cmp-spa-101",
-          aspect: "spa",
-          guestName: "Elena Rostova",
-          roomNumber: "209",
-          facilityArea: "Spa Hydrotherapy Wing",
-          complaintText: "The Spa Jacuzzi water was lukewarm, jet pressure cut out completely mid-session, and there was a distinct electrical burning odor from the pump room. Completely ruined our booked private couples session!",
-          targetEquipmentId: "eq-6",
-          targetEquipmentName: "Spa Jacuzzi Heater",
-          severity: "critical",
-        });
-        setJustApplied(true);
-      }
-    }
-
+    // State is already applied by pickScenario / applyScenarioToStore.
+    // Just fetch the step-by-step animation data.
     try {
       const url =
         selectedId === "festival"
@@ -295,9 +330,9 @@ export default function ScenarioSimulator() {
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
             {[
-              { label: "+10% (Moderate)", value: 0.1 },
-              { label: "+20% (Default - High)", value: 0.2 },
-              { label: "+30% (Surge - Severe)", value: 0.3 },
+              { label: "+50% (High Surge)", value: 0.5 },
+              { label: "+100% (Extreme Festival - Default)", value: 1.0 },
+              { label: "+150% (Historic Mega-Festival)", value: 1.5 },
             ].map((opt) => (
               <button
                 key={opt.value}
@@ -306,7 +341,7 @@ export default function ScenarioSimulator() {
                 className={clsx(
                   "rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-all border",
                   demandBoost === opt.value
-                    ? "border-series-1 bg-series-1 text-white shadow-sm ring-1 ring-series-1"
+                    ? "border-amber-400 bg-gradient-to-r from-amber-500 via-orange-500 to-rose-600 text-white shadow-[0_0_15px_rgba(245,158,11,0.5)] ring-1 ring-amber-400 font-bold"
                     : "border-border-strong bg-surface text-ink-secondary hover:text-ink hover:bg-page"
                 )}
               >
@@ -319,25 +354,12 @@ export default function ScenarioSimulator() {
 
       <div className="flex flex-wrap items-center gap-3">
         <button
-          onClick={() => runSimulation(true)}
+          onClick={() => runSimulation()}
           disabled={!selectedId || running}
           className="flex items-center gap-2 rounded-full bg-series-1 px-5 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:opacity-90 disabled:opacity-50"
         >
-          <Zap className="h-4 w-4" strokeWidth={2} />
-          {running
-            ? "Simulating & Applying..."
-            : isLiveActive
-            ? `Update Live State (+${Math.round(demandBoost * 100)}%)`
-            : "Apply to Live Resort State & Run"}
-        </button>
-
-        <button
-          onClick={() => runSimulation(false)}
-          disabled={!selectedId || running}
-          className="flex items-center gap-2 rounded-full border border-border-strong bg-surface-raised px-4 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-page disabled:opacity-50"
-        >
           <Play className="h-4 w-4" strokeWidth={2} />
-          Preview Steps Only
+          {running ? "Simulating..." : "Run Simulation Steps"}
         </button>
 
         {isLiveActive && (

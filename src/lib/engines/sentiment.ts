@@ -92,33 +92,55 @@ export function buildSentimentSummary(stateOrInjected?: ResortState | InjectedRe
   let recoveryRecommendation: string | undefined;
   let affectedGuestCompCount = 0;
 
+  const aspectModifiers: Partial<Record<Aspect, number>> = {};
+
   if (isState) {
     const surgeEvent = stateOrInjected.activeEvents.find((e) => e.type === "DEMAND_SURGE");
     const failureEvent = stateOrInjected.activeEvents.find((e) => e.type === "EQUIPMENT_FAILURE");
+    const complaintEvent = stateOrInjected.activeEvents.find((e) => e.type === "GUEST_COMPLAINT");
 
-    if (failureEvent) {
-      hasEquipmentFailure = true;
-      activeEquipmentFailureName = (failureEvent.details?.equipmentName as string) ?? "Equipment";
-      activeOutOfOrderCount = (failureEvent.details?.affectedRoomCount as number) ?? 15;
-      affectedGuestCompCount = activeOutOfOrderCount;
-      serviceRiskLevel = "High";
+    const demandReason = ((surgeEvent?.label ?? "") + " " + (surgeEvent?.details?.reason ?? "")).toLowerCase();
+    const isWedding = Boolean(surgeEvent && (demandReason.includes("wedding") || demandReason.includes("buyout")));
+    const isSlump = Boolean(surgeEvent && (((surgeEvent.details?.demandBoost as number | undefined) ?? 0) < 0 || demandReason.includes("monsoon") || demandReason.includes("storm")));
+    const isFestival = Boolean(surgeEvent && !isWedding && !isSlump);
 
-      recoveryRecommendation = `Deploy automated service recovery for ${activeOutOfOrderCount} affected Deluxe Ocean guests: $75 resort credit + complimentary spa day pass per room ($${(activeOutOfOrderCount * 75).toLocaleString()} total recovery budget).`;
+    const isWingBlackout = Boolean(failureEvent && (failureEvent.details?.equipmentId === "eq-11" || Number(failureEvent.details?.affectedRoomCount ?? 0) > 20));
+    const isChiller = Boolean(failureEvent && !isWingBlackout);
 
-      if (surgeEvent) {
-        serviceRiskDetail = `CRITICAL COMPOUND RISK: ${activeEquipmentFailureName} failure offline during ${surgeEvent.label}. Climate control lost in ${activeOutOfOrderCount} rooms while front desk and dining queues peak. Proactive compensation required.`;
-      } else {
-        serviceRiskDetail = `ACTIVE CLIMATE DISRUPTION: ${activeEquipmentFailureName} failure disabled cooling across ${activeOutOfOrderCount} rooms. Room comfort sentiment sharply degraded; proactive service recovery ($75 credit + spa pass) recommended.`;
-      }
-    } else if (surgeEvent) {
-      const boost = (surgeEvent.details?.demandBoost as number) ?? 0.2;
-      serviceRiskLevel = boost >= 0.25 ? "High" : "Elevated";
-      serviceRiskDetail = `Upcoming ${surgeEvent.label} is forecasted to exceed standard staffing thresholds, creating high risk for check-in delays, dining queues, and housekeeping backlogs.`;
+    if (isWingBlackout) {
+      aspectModifiers["room comfort"] = -0.88;
+      aspectModifiers["noise"] = -0.62;
+      aspectModifiers["check-in"] = -0.70;
+      aspectModifiers["staff"] = -0.45;
+    } else if (isChiller) {
+      aspectModifiers["room comfort"] = -0.82;
+      aspectModifiers["staff"] = -0.25;
+    } else if (isFestival) {
+      aspectModifiers["check-in"] = -0.58;
+      aspectModifiers["staff"] = -0.42;
+      aspectModifiers["pool"] = -0.38;
+      aspectModifiers["cleanliness"] = -0.18;
+      aspectModifiers["food"] = 0.65;
+    } else if (isWedding) {
+      aspectModifiers["food"] = 0.94;
+      aspectModifiers["staff"] = 0.96;
+      aspectModifiers["spa"] = 0.88;
+      aspectModifiers["value"] = 0.84;
+      aspectModifiers["room comfort"] = 0.85;
+      aspectModifiers["check-in"] = 0.78;
+    } else if (isSlump) {
+      aspectModifiers["pool"] = -0.28;
+      aspectModifiers["room comfort"] = 0.78;
+      aspectModifiers["noise"] = 0.85;
+      aspectModifiers["staff"] = 0.72;
+      aspectModifiers["value"] = 0.65;
+    }
+
+    if (complaintEvent) {
+      const asp = (complaintEvent.details?.aspect as Aspect) ?? "spa";
+      aspectModifiers[asp] = -0.75;
     }
   }
-
-  const overallScore = avg(scored.map((r) => r.score));
-  const overallStars = avg(scored.map((r) => r.starRating));
 
   // Weekly trend, oldest to newest.
   const weekMap = new Map<string, number[]>();
@@ -141,13 +163,20 @@ export function buildSentimentSummary(stateOrInjected?: ResortState | InjectedRe
     const rows = scored.filter((r) => r.aspect === aspect);
     const recent = rows.filter((r) => r.date > recentCutoff);
     const prior = rows.filter((r) => r.date <= recentCutoff && r.date > priorCutoff);
+    const baseScore = avg(rows.map((r) => r.score));
+    const effectiveScore = aspectModifiers[aspect] !== undefined ? aspectModifiers[aspect]! : baseScore;
     return {
       aspect,
-      avgScore: avg(rows.map((r) => r.score)),
+      avgScore: round2(effectiveScore),
       reviewCount: rows.length,
-      trendDelta: recent.length && prior.length ? avg(recent.map((r) => r.score)) - avg(prior.map((r) => r.score)) : 0,
+      trendDelta: aspectModifiers[aspect] !== undefined
+        ? round2(effectiveScore - baseScore)
+        : (recent.length && prior.length ? avg(recent.map((r) => r.score)) - avg(prior.map((r) => r.score)) : 0),
     };
   });
+
+  const overallScore = avg(byAspect.map((a) => a.avgScore));
+  const overallStars = Math.max(1.0, Math.min(5.0, 3.2 + overallScore * 1.8));
 
   const seenQuotes = new Set<string>();
   const topIssues: SentimentIssue[] = scored

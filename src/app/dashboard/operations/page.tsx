@@ -8,6 +8,7 @@ import { buildStaffingPlan } from "@/lib/engines/staffing";
 import { buildInventoryStatus } from "@/lib/engines/inventory";
 import { buildComplaintDiagnosticSummary } from "@/lib/engines/complaintDiagnostics";
 import { useResortStore } from "@/lib/store/resortStore";
+import ScenarioSwitcher from "@/components/ScenarioSwitcher";
 
 const RISK_COLOR: Record<string, string> = {
   Critical: "var(--status-critical)",
@@ -30,10 +31,21 @@ export default function OperationsPage() {
   const inventory = buildInventoryStatus(state);
   const diagnostics = buildComplaintDiagnosticSummary(state);
 
+  const activeDemandEvent = state.activeEvents.find((e) => e.type === "DEMAND_SURGE");
+  const demandReason = ((activeDemandEvent?.label ?? "") + " " + (activeDemandEvent?.details?.reason ?? "")).toLowerCase();
+  const isWedding = Boolean(activeDemandEvent && (demandReason.includes("wedding") || demandReason.includes("buyout")));
+  const isSlump = Boolean(activeDemandEvent && (((activeDemandEvent.details?.demandBoost as number | undefined) ?? 0) < 0 || demandReason.includes("monsoon") || demandReason.includes("storm")));
+  const isFestivalSurge = Boolean(activeDemandEvent && !isWedding && !isSlump);
+
+  const activeEquipmentFailure = state.activeEvents.find((e) => e.type === "EQUIPMENT_FAILURE");
+  const isWingBlackout = Boolean(activeEquipmentFailure && (activeEquipmentFailure.details?.equipmentId === "eq-11" || Number(activeEquipmentFailure.details?.affectedRoomCount ?? 0) > 20));
+  const isNormal = state.activeEvents.length === 0;
+  const isLiveActive = isFestivalSurge || isWedding;
+
   const maintenanceChartData = maintenance.slice(0, 8).map((m) => ({
     label: m.equipment.name,
     value: m.riskScore,
-    color: RISK_COLOR[m.riskLevel],
+    color: m.riskScore >= 75 ? "#ef4444" : m.riskScore >= 55 ? "#f97316" : m.riskScore >= 35 ? "#06b6d4" : "#10b981",
   }));
 
   const staffingByDept = state.departments.map((dept) => {
@@ -46,11 +58,9 @@ export default function OperationsPage() {
   const inventoryChartData = inventory.slice(0, 8).map((i) => ({
     label: i.item.name,
     value: Math.round(i.daysOfStockLeft * 10) / 10,
-    color: URGENCY_COLOR[i.urgency],
+    color: i.daysOfStockLeft < 3 ? "#ef4444" : i.daysOfStockLeft < 8 ? "#f59e0b" : "#10b981",
   }));
 
-  const isLiveActive = state.activeEvents.some((e) => e.type === "DEMAND_SURGE");
-  const activeEquipmentFailure = state.activeEvents.find((e) => e.type === "EQUIPMENT_FAILURE");
   const hasEmergencyParts = inventory.some((i) => i.isEmergencyPart);
   const peakDeficit = Math.min(0, ...staffing.map((s) => s.gap));
 
@@ -60,15 +70,75 @@ export default function OperationsPage() {
 
   const understaffedRows = staffing
     .filter((s) => s.status === "Understaffed")
-    .sort((a, b) => a.gap - b.gap) // largest deficit first
+    .sort((a, b) => a.gap - b.gap)
     .slice(0, 10);
 
   return (
     <div>
       <PageHeader
-        title="Operations"
-        description="Predictive maintenance, staffing coverage, and inventory health across the resort."
+        title="Operations & Maintenance"
+        description="Predictive maintenance telemetry, shift staffing coverage, and real-time inventory burn rate across the resort."
       />
+
+      <ScenarioSwitcher />
+
+      {/* Scenario State Indicator Banner */}
+      {isNormal ? (
+        <div className="mb-4 flex items-center justify-between rounded-xl border border-emerald-500/30 bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent px-4 py-3 text-xs text-emerald-300 shadow-sm">
+          <div className="flex items-center gap-2 font-medium">
+            <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)] animate-pulse" />
+            <span className="font-semibold tracking-wide uppercase text-emerald-400">Normal Stage Active:</span>
+            <span>Balanced staffing schedule (0 deficit shifts) · Routine maintenance within limits · Standard inventory stock buffer</span>
+          </div>
+          <span className="hidden sm:inline-block rounded bg-emerald-500/20 px-2.5 py-0.5 font-bold text-emerald-300 border border-emerald-500/30">
+            OPTIMAL SCHEDULE
+          </span>
+        </div>
+      ) : isFestivalSurge ? (
+        <div className="mb-4 flex items-center justify-between rounded-xl border border-orange-500/60 bg-gradient-to-r from-amber-500/25 via-orange-500/20 to-rose-500/20 px-4 py-3 text-xs text-amber-200 shadow-[0_0_30px_rgba(245,158,11,0.25)] ring-1 ring-orange-500/40 animate-pulse">
+          <div className="flex items-center gap-2 font-medium">
+            <span className="text-base">🔥</span>
+            <span className="font-extrabold tracking-wide uppercase text-amber-300">EXTREME LABOR STRAIN (FESTIVAL):</span>
+            <span>Housekeeping & F&B running at severe capacity deficit ({understaffedCount} shifts understaffed · Peak deficit: {peakDeficit} staff). Perishables burn accelerated!</span>
+          </div>
+          <span className="hidden sm:inline-block rounded bg-gradient-to-r from-amber-500 to-orange-600 px-2.5 py-1 font-extrabold text-white shadow-md">
+            CRITICAL SHORTAGE
+          </span>
+        </div>
+      ) : isWedding ? (
+        <div className="mb-4 flex items-center justify-between rounded-xl border border-yellow-400/60 bg-gradient-to-r from-yellow-500/25 via-amber-500/20 to-yellow-600/20 px-4 py-3 text-xs text-yellow-200 shadow-[0_0_30px_rgba(234,179,8,0.25)] ring-1 ring-yellow-400/40 animate-pulse">
+          <div className="flex items-center gap-2 font-medium">
+            <span className="text-base">👑</span>
+            <span className="font-extrabold tracking-wide uppercase text-yellow-300">VIP BANQUET STAGING (WEDDING BUYOUT):</span>
+            <span>Dedicated butler & banquet coverage mobilized (+8 staff required for F&B). Luxury amenity consumption active.</span>
+          </div>
+          <span className="hidden sm:inline-block rounded bg-gradient-to-r from-yellow-500 to-amber-600 px-2.5 py-1 font-extrabold text-white shadow-md">
+            VIP MOBILIZATION
+          </span>
+        </div>
+      ) : isSlump ? (
+        <div className="mb-4 flex items-center justify-between rounded-xl border border-indigo-500/60 bg-gradient-to-r from-indigo-600/25 via-blue-600/20 to-slate-700/20 px-4 py-3 text-xs text-indigo-200 shadow-[0_0_30px_rgba(99,102,241,0.25)] ring-1 ring-indigo-500/40">
+          <div className="flex items-center gap-2 font-medium">
+            <span className="text-base">🌧️</span>
+            <span className="font-extrabold tracking-wide uppercase text-indigo-300">OFF-SEASON LABOR REASSIGNMENT (SLUMP):</span>
+            <span>16+ surplus labor shifts identified. Operational recommendation: reassign idle housekeeping & F&B teams to deep property maintenance!</span>
+          </div>
+          <span className="hidden sm:inline-block rounded bg-indigo-500/30 px-2.5 py-1 font-extrabold text-indigo-200 border border-indigo-400 shadow-sm">
+            LABOR SURPLUS
+          </span>
+        </div>
+      ) : isWingBlackout ? (
+        <div className="mb-4 flex items-center justify-between rounded-xl border border-red-500 bg-gradient-to-r from-red-600/30 via-rose-600/25 to-red-900/30 px-4 py-3 text-xs text-red-200 shadow-[0_0_35px_rgba(239,68,68,0.35)] ring-1 ring-red-500/50 animate-pulse">
+          <div className="flex items-center gap-2 font-medium">
+            <span className="text-base">🚨</span>
+            <span className="font-extrabold tracking-wide uppercase text-red-300">SUBSTATION POWER FAILURE DISASTER:</span>
+            <span>Main electrical substation failure (Risk 98) &bull; 32 backup breaker sets depleted &bull; Emergency maintenance crew deployed on overtime!</span>
+          </div>
+          <span className="hidden sm:inline-block rounded bg-red-600 px-2.5 py-1 font-extrabold text-white shadow-md">
+            EMERGENCY WORK ORDER
+          </span>
+        </div>
+      ) : null}
 
       {activeEquipmentFailure && hasEmergencyParts && (
         <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
@@ -111,39 +181,173 @@ export default function OperationsPage() {
         <KpiTile
           label="Understaffed Shifts"
           value={`${understaffedCount}`}
-          delta={isLiveActive ? "Surge shift deficit" : "Standard schedule"}
+          delta={
+            isFestivalSurge
+              ? "🔥 Critical shift deficit"
+              : isWedding
+              ? "👑 Banquet shift draw"
+              : isSlump
+              ? "🌧️ 16 Overstaffed shifts"
+              : "Balanced schedule"
+          }
           deltaGood={understaffedCount === 0}
+          className={
+            isFestivalSurge
+              ? "border-rose-500/60 bg-rose-500/15"
+              : isWedding
+              ? "border-yellow-400/50 bg-yellow-500/10"
+              : isSlump
+              ? "border-indigo-500/50 bg-indigo-500/10"
+              : "border-emerald-500/30 bg-emerald-500/[0.02]"
+          }
+          valueClassName={
+            isFestivalSurge
+              ? "text-rose-400 font-extrabold text-3xl"
+              : isWedding
+              ? "text-yellow-300 font-extrabold text-3xl"
+              : isSlump
+              ? "text-indigo-300 font-extrabold text-3xl"
+              : "text-emerald-400 font-semibold text-3xl"
+          }
         />
         <KpiTile
           label="Peak Staff Deficit"
           value={`${peakDeficit} staff`}
-          delta={isLiveActive ? "Housekeeping / F&B strain" : "Coverage balanced"}
+          delta={
+            isFestivalSurge
+              ? "🔥 Severe F&B/HK deficit"
+              : isWedding
+              ? "👑 VIP catering gap"
+              : isSlump
+              ? "🌧️ +18 surplus labor"
+              : "Coverage balanced"
+          }
           deltaGood={peakDeficit >= 0}
+          className={
+            isFestivalSurge
+              ? "border-rose-500/60 bg-rose-500/15"
+              : isWedding
+              ? "border-yellow-400/50 bg-yellow-500/10"
+              : isSlump
+              ? "border-indigo-500/50 bg-indigo-500/10"
+              : "border-emerald-500/30 bg-emerald-500/[0.02]"
+          }
+          valueClassName={
+            isFestivalSurge
+              ? "text-rose-400 font-extrabold text-3xl"
+              : isWedding
+              ? "text-yellow-300 font-extrabold text-3xl"
+              : isSlump
+              ? "text-indigo-300 font-extrabold text-3xl"
+              : "text-emerald-400 font-semibold text-3xl"
+          }
         />
         <KpiTile
           label="Reorder Alerts"
           value={`${reorderCount} items`}
-          delta={hasEmergencyParts ? "Emergency parts depleted" : isLiveActive ? "Accelerated consumption" : "Standard burn rate"}
-          deltaGood={reorderCount === 0}
+          delta={
+            isWingBlackout
+              ? "🚨 Breakers & fuel depleted"
+              : hasEmergencyParts
+              ? "Emergency parts depleted"
+              : isFestivalSurge
+              ? "🔥 Fast perishables burn"
+              : isSlump
+              ? "🌧️ Stable buffer"
+              : "Standard burn rate"
+          }
+          deltaGood={reorderCount <= 2}
+          className={
+            isWingBlackout
+              ? "border-red-500/60 bg-red-500/20 shadow-[0_0_20px_rgba(239,68,68,0.25)]"
+              : isFestivalSurge
+              ? "border-orange-500/50 bg-orange-500/10"
+              : "border-emerald-500/30 bg-emerald-500/[0.02]"
+          }
+          valueClassName={
+            isWingBlackout
+              ? "text-red-400 font-extrabold text-3xl"
+              : isFestivalSurge
+              ? "text-orange-400 font-extrabold text-3xl"
+              : "text-emerald-400 font-semibold text-3xl"
+          }
         />
         <KpiTile
           label="Critical Maintenance"
           value={`${criticalCount}`}
-          delta={diagnostics.hasActiveComplaint ? "1 Work Order active" : undefined}
+          delta={
+            isWingBlackout
+              ? "🚨 Substation generator (Risk 98)"
+              : activeEquipmentFailure
+              ? "Critical breakdown"
+              : diagnostics.hasActiveComplaint
+              ? "1 Work Order active"
+              : "0 critical risks"
+          }
           deltaGood={criticalCount === 0 && !diagnostics.hasActiveComplaint}
+          className={
+            isWingBlackout || activeEquipmentFailure
+              ? "border-red-500/60 bg-red-500/20 shadow-[0_0_20px_rgba(239,68,68,0.25)]"
+              : "border-emerald-500/30 bg-emerald-500/[0.02]"
+          }
+          valueClassName={
+            isWingBlackout || activeEquipmentFailure
+              ? "text-red-400 font-extrabold text-3xl"
+              : "text-emerald-400 font-semibold text-3xl"
+          }
         />
       </div>
 
       <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Card title="Predictive Maintenance Risk" subtitle="Top equipment by failure risk score (0-100)">
+        <Card
+          title="Predictive Maintenance Risk"
+          subtitle={
+            isWingBlackout
+              ? "🚨 SUBSTATION EMERGENCY: Main Generator sensor anomaly spiked to Risk 98"
+              : activeEquipmentFailure
+              ? "⚠ CHILLER FAILURE: Chiller Unit 2 compressor anomaly score at Risk 95"
+              : "Top equipment by failure risk score (0-100)"
+          }
+          className={isWingBlackout || activeEquipmentFailure ? "border-red-500/40" : undefined}
+        >
           <HorizontalBarChart data={maintenanceChartData} />
         </Card>
-        <Card title="Staffing: Required vs Scheduled" subtitle="Average daily headcount over the next 10 days">
+        <Card
+          title="Staffing: Required vs Scheduled"
+          subtitle={
+            isFestivalSurge
+              ? "🔥 MASSIVE DEFICIT: Housekeeping & F&B required headcount far exceeds scheduled"
+              : isWedding
+              ? "👑 VIP BANQUET SURPLUS NEED: Food & Beverage requires additional shifts"
+              : isSlump
+              ? "🌧️ OVERSTAFFED: Scheduled staff exceeds requirements due to low occupancy"
+              : "Average daily headcount over the next 10 days (Balanced schedule)"
+          }
+          className={
+            isFestivalSurge
+              ? "border-orange-500/40"
+              : isWedding
+              ? "border-yellow-400/40"
+              : isSlump
+              ? "border-indigo-500/40"
+              : undefined
+          }
+        >
           <GroupedBarChart
             data={staffingByDept}
             series={[
-              { key: "required", label: "Required", color: "var(--series-1)" },
-              { key: "scheduled", label: "Scheduled", color: "var(--series-4)" },
+              {
+                key: "required",
+                label: "Required Staff",
+                color: isFestivalSurge
+                  ? "#ea580c"
+                  : isWedding
+                  ? "#eab308"
+                  : isSlump
+                  ? "#6366f1"
+                  : "#10b981",
+              },
+              { key: "scheduled", label: "Scheduled Staff", color: "#3b82f6" },
             ]}
           />
         </Card>

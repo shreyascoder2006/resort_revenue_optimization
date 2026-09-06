@@ -31,6 +31,8 @@ export interface PricingSummary {
   forecastAdr: number; // next 7 days recommended ADR
   forecastRevPar: number; // next 7 days recommended RevPAR
   hasSurge: boolean; // whether an event/demand surge falls within the next 7 days
+  hasSlump?: boolean; // whether a demand slump/cancellation wave is active
+  isBuyout?: boolean; // whether a VIP buyout/wedding is active
   projectedRevenueLift: number; // % vs flat-rate baseline over the forecast window
   recommendations: PriceRecommendation[];
 
@@ -116,6 +118,10 @@ export function buildPricingRecommendations(
           ? `Elevated demand on reduced capacity (${Math.round(effectiveOccupancyRate * 100)}% of operable inventory)`
           : `High forecast demand (${Math.round(f.forecastOccupancyRate * 100)}% occupancy)`
       );
+    } else if (effectiveOccupancyRate < 0.22) {
+      demandLevel = "Low";
+      multiplier *= 0.62;
+      rationale.push(`Critical demand slump (${Math.round(effectiveOccupancyRate * 100)}% occupancy) - clearance distress discount active`);
     } else if (effectiveOccupancyRate < 0.4) {
       demandLevel = "Low";
       multiplier *= 0.88;
@@ -148,16 +154,30 @@ export function buildPricingRecommendations(
       }
     }
 
+    const isWeddingOrBuyout = Boolean(f.eventLabel?.toLowerCase().includes("wedding") || f.eventLabel?.toLowerCase().includes("buyout"));
+
     if (f.isEvent && f.eventDemandBoost !== undefined) {
       if (f.eventDemandBoost > 0) {
-        multiplier *= 1.1;
-        rationale.push(`Local demand driver: ${f.eventLabel}`);
+        if (isWeddingOrBuyout) {
+          // Ultra-luxury buyout package yield
+          const buyoutMultiplier = 1 + Math.min(2.6, f.eventDemandBoost * 1.7);
+          multiplier *= buyoutMultiplier;
+          rationale.push(`VIP Buyout & Wedding Premium (+${Math.round(f.eventDemandBoost * 100)}% yield): ${f.eventLabel}`);
+        } else {
+          // Dynamic surge pricing scale for high demand/festival windows
+          const surgeMultiplier = 1 + Math.min(1.5, f.eventDemandBoost * 1.15);
+          multiplier *= surgeMultiplier;
+          rationale.push(`Festival Surge Pricing (+${Math.round(f.eventDemandBoost * 100)}% demand): ${f.eventLabel}`);
+        }
       } else if (f.eventDemandBoost < 0) {
-        rationale.push(`Demand disruption: ${f.eventLabel}`);
+        multiplier *= Math.max(0.55, 1 + f.eventDemandBoost * 0.55);
+        rationale.push(`Weather disruption / slump discount (${Math.round(f.eventDemandBoost * 100)}%): ${f.eventLabel}`);
       }
     }
 
-    multiplier = clamp(multiplier, 0.75, 1.65);
+    const minMultiplier = (f.isEvent && (f.eventDemandBoost ?? 0) < 0) || effectiveOccupancyRate < 0.22 ? 0.45 : 0.75;
+    const maxMultiplier = isWeddingOrBuyout ? 3.6 : (f.isEvent && (f.eventDemandBoost ?? 0) > 0) ? 2.8 : 1.75;
+    multiplier = clamp(multiplier, minMultiplier, maxMultiplier);
     const calculatedRate =
       currency === "INR"
         ? Math.round((roomBaseRate * multiplier) / 100) * 100
@@ -236,6 +256,12 @@ export function buildPricingRecommendations(
   const forecastAdr = next7Booked > 0 ? next7Revenue / next7Booked : 0;
   const forecastRevPar = next7Available > 0 ? next7Revenue / next7Available : 0;
   const hasSurge = next7Recs.some((r) => r.isEvent && (r.eventDemandBoost ?? 0) > 0);
+  const hasSlump = next7Recs.some((r) => r.isEvent && (r.eventDemandBoost ?? 0) < 0);
+  const isBuyout = next7Recs.some(
+    (r) =>
+      r.isEvent &&
+      (r.eventLabel?.toLowerCase().includes("wedding") || r.eventLabel?.toLowerCase().includes("buyout"))
+  );
 
   const flatRevenue = recommendations.reduce((s, r) => {
     const room = roomById.get(r.roomTypeId)!;
@@ -256,9 +282,14 @@ export function buildPricingRecommendations(
   // Baseline vs Current Live State comparison
   let baselineProjectedRevenue = next7Revenue;
   if (!options?.skipBaselineCalculation && isState) {
-    const baselineState = getBaselineResortState();
-    const baselineSummary = buildPricingRecommendations(baselineState, { skipBaselineCalculation: true });
-    baselineProjectedRevenue = baselineSummary.next7ProjectedRevenue;
+    if (stateOrEvents.activeEvents.length === 0 && Object.keys(pricingOverrides).length === 0) {
+      // Clean baseline state has 0 variance
+      baselineProjectedRevenue = next7Revenue;
+    } else {
+      const baselineState = getBaselineResortState();
+      const baselineSummary = buildPricingRecommendations(baselineState, { skipBaselineCalculation: true });
+      baselineProjectedRevenue = baselineSummary.next7ProjectedRevenue;
+    }
   }
   const revenueImpact = next7Revenue - baselineProjectedRevenue;
 
@@ -285,6 +316,8 @@ export function buildPricingRecommendations(
     forecastAdr: Math.round(forecastAdr),
     forecastRevPar: Math.round(forecastRevPar),
     hasSurge,
+    hasSlump,
+    isBuyout,
     projectedRevenueLift: Math.round(projectedRevenueLift * 10) / 10,
     recommendations,
 

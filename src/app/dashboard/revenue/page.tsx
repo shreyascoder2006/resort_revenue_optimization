@@ -8,6 +8,7 @@ import { type DemandForecastDay } from "@/lib/data/bookings";
 import { type RoomType } from "@/lib/data/rooms";
 import { useResortStore } from "@/lib/store/resortStore";
 import { formatCurrency, type Currency } from "@/lib/utils/currency";
+import ScenarioSwitcher from "@/components/ScenarioSwitcher";
 import {
   AlertTriangle,
   RotateCcw,
@@ -39,6 +40,17 @@ export default function RevenuePage() {
   const { state, dispatch } = useResortStore();
   const pricing = buildPricingRecommendations(state);
   const demandTrend = buildDemandTrend(state.demandForecast, state.rooms);
+
+  const activeDemandEvent = state.activeEvents.find((e) => e.type === "DEMAND_SURGE");
+  const demandReason = ((activeDemandEvent?.label ?? "") + " " + (activeDemandEvent?.details?.reason ?? "")).toLowerCase();
+  const isWedding = Boolean(activeDemandEvent && (demandReason.includes("wedding") || demandReason.includes("buyout")));
+  const isSlump = Boolean(activeDemandEvent && (((activeDemandEvent.details?.demandBoost as number | undefined) ?? 0) < 0 || demandReason.includes("monsoon") || demandReason.includes("storm")));
+  const isFestivalSurge = Boolean(activeDemandEvent && !isWedding && !isSlump);
+
+  const activeEqEvent = state.activeEvents.find((e) => e.type === "EQUIPMENT_FAILURE");
+  const isWingBlackout = Boolean(activeEqEvent && (activeEqEvent.details?.equipmentId === "eq-11" || pricing.totalOutOfOrderRooms > 20));
+  const isChillerFailure = Boolean(activeEqEvent && !isWingBlackout);
+  const isNormal = state.activeEvents.length === 0;
 
   const activeCurrency: Currency = state.currency ?? "INR";
 
@@ -136,6 +148,66 @@ export default function RevenuePage() {
           </button>
         </div>
       </div>
+
+      <ScenarioSwitcher />
+
+      {/* State Indicator Banner */}
+      {isNormal ? (
+        <div className="mb-4 flex items-center justify-between rounded-xl border border-emerald-500/30 bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent px-4 py-3 text-xs text-emerald-300 shadow-sm">
+          <div className="flex items-center gap-2 font-medium">
+            <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)] animate-pulse" />
+            <span className="font-semibold tracking-wide uppercase text-emerald-400">Normal Stage Active:</span>
+            <span>Standard off-peak baseline yield · Calm ~30% occupancy · ₹7,456 ADR · Clean ₹0 variance</span>
+          </div>
+          <span className="hidden sm:inline-block rounded bg-emerald-500/20 px-2.5 py-0.5 font-bold text-emerald-300 border border-emerald-500/30">
+            OFF-PEAK CALM
+          </span>
+        </div>
+      ) : isFestivalSurge ? (
+        <div className="mb-4 flex items-center justify-between rounded-xl border border-orange-500/60 bg-gradient-to-r from-amber-500/25 via-orange-500/20 to-rose-500/20 px-4 py-3 text-xs text-amber-200 shadow-[0_0_30px_rgba(245,158,11,0.25)] ring-1 ring-orange-500/40 animate-pulse">
+          <div className="flex items-center gap-2 font-medium">
+            <span className="text-base">🔥</span>
+            <span className="font-extrabold tracking-wide uppercase text-amber-300">EXTREME FESTIVAL SURGE ACTIVE:</span>
+            <span>Massive demand shockwave (+120%) · 95% peak occupancy · Dynamic rate surges to {formatCurrency(pricing.forecastAdr, activeCurrency)} ADR!</span>
+          </div>
+          <span className="hidden sm:inline-block rounded bg-gradient-to-r from-amber-500 to-orange-600 px-2.5 py-1 font-extrabold text-white shadow-md">
+            PEAK SURGE YIELD
+          </span>
+        </div>
+      ) : isWedding ? (
+        <div className="mb-4 flex items-center justify-between rounded-xl border border-yellow-400/60 bg-gradient-to-r from-yellow-500/25 via-amber-500/20 to-yellow-600/20 px-4 py-3 text-xs text-yellow-200 shadow-[0_0_30px_rgba(234,179,8,0.25)] ring-1 ring-yellow-400/40 animate-pulse">
+          <div className="flex items-center gap-2 font-medium">
+            <span className="text-base">✨</span>
+            <span className="font-extrabold tracking-wide uppercase text-yellow-300">VIP ROYAL WEDDING BUYOUT ACTIVE:</span>
+            <span>Multi-wing private buyout (90% Occ) · Luxury buyout rate {formatCurrency(pricing.forecastAdr, activeCurrency)} ADR · {formatCurrency(pricing.next7ProjectedRevenue, activeCurrency)} 7d Revenue!</span>
+          </div>
+          <span className="hidden sm:inline-block rounded bg-gradient-to-r from-yellow-500 to-amber-600 px-2.5 py-1 font-extrabold text-white shadow-md">
+            👑 ULTRA-LUXURY YIELD
+          </span>
+        </div>
+      ) : isSlump ? (
+        <div className="mb-4 flex items-center justify-between rounded-xl border border-indigo-500/60 bg-gradient-to-r from-indigo-600/25 via-blue-600/20 to-slate-700/20 px-4 py-3 text-xs text-indigo-200 shadow-[0_0_30px_rgba(99,102,241,0.25)] ring-1 ring-indigo-500/40">
+          <div className="flex items-center gap-2 font-medium">
+            <span className="text-base">🌧️</span>
+            <span className="font-extrabold tracking-wide uppercase text-indigo-300">MONSOON STORM SLUMP ACTIVE:</span>
+            <span>Severe cyclonic weather warning (-70% Demand) · Occupancy plunges to 12% · Distress stimulus discount to {formatCurrency(pricing.forecastAdr, activeCurrency)} ADR active!</span>
+          </div>
+          <span className="hidden sm:inline-block rounded bg-indigo-500/30 px-2.5 py-1 font-extrabold text-indigo-200 border border-indigo-400 shadow-sm">
+            🌧️ DISTRESS SLUMP
+          </span>
+        </div>
+      ) : isWingBlackout ? (
+        <div className="mb-4 flex items-center justify-between rounded-xl border border-red-500 bg-gradient-to-r from-red-600/30 via-rose-600/25 to-red-900/30 px-4 py-3 text-xs text-red-200 shadow-[0_0_35px_rgba(239,68,68,0.35)] ring-1 ring-red-500/50 animate-pulse">
+          <div className="flex items-center gap-2 font-medium">
+            <span className="text-base">🚨</span>
+            <span className="font-extrabold tracking-wide uppercase text-red-300">MAJOR ELECTRICAL SUBSTATION BLACKOUT:</span>
+            <span>40 rooms knocked offline across Deluxe Ocean & Lagoon wings · 35+ emergency relocations · Severe revenue deficit!</span>
+          </div>
+          <span className="hidden sm:inline-block rounded bg-red-600 px-2.5 py-1 font-extrabold text-white shadow-md">
+            🚨 CATASTROPHIC DISASTER
+          </span>
+        </div>
+      ) : null}
 
       {/* MANAGER PRICING OVERRIDE CONTROLLER CARD */}
       <div className="mb-5 rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-surface-2 via-surface-1 to-surface-2 p-5 shadow-lg backdrop-blur-md">
@@ -378,14 +450,78 @@ export default function RevenuePage() {
         <KpiTile
           label="Available Rooms"
           value={`${pricing.totalAvailableRooms} / ${pricing.totalPhysicalRooms}`}
-          delta={pricing.totalOutOfOrderRooms > 0 ? `-${pricing.totalOutOfOrderRooms} out of order` : "100% operational"}
+          delta={
+            pricing.totalOutOfOrderRooms > 0
+              ? `-${pricing.totalOutOfOrderRooms} out of order`
+              : isFestivalSurge
+              ? "🔥 96% peak booked"
+              : isWedding
+              ? "👑 90% VIP buyout"
+              : isSlump
+              ? "🌧️ Excess vacancy"
+              : "100% operational"
+          }
           deltaGood={pricing.totalOutOfOrderRooms === 0}
+          className={
+            isWingBlackout
+              ? "border-red-500/60 bg-gradient-to-b from-red-500/20 via-surface to-surface ring-1 ring-red-500/40"
+              : isFestivalSurge
+              ? "border-orange-500/50 bg-gradient-to-b from-orange-500/10 to-surface shadow-[0_0_15px_rgba(249,115,22,0.1)]"
+              : isWedding
+              ? "border-yellow-400/50 bg-yellow-500/10"
+              : isSlump
+              ? "border-indigo-500/40 bg-indigo-500/10"
+              : "border-emerald-500/30 bg-emerald-500/[0.02]"
+          }
+          valueClassName={
+            isWingBlackout
+              ? "text-red-400 font-bold"
+              : isFestivalSurge
+              ? "text-orange-400 font-bold"
+              : isWedding
+              ? "text-yellow-300 font-bold"
+              : isSlump
+              ? "text-indigo-300 font-bold"
+              : undefined
+          }
         />
         <KpiTile
           label="Forecast Occupancy (7d)"
           value={`${Math.round(pricing.forecastOccupancy * 100)}%`}
-          delta={pricing.totalOutOfOrderRooms > 0 ? "Capacity constrained" : (pricing.hasSurge ? "+12% surge" : `Trailing: ${Math.round(pricing.currentOccupancy * 100)}%`)}
-          deltaGood={true}
+          delta={
+            isWingBlackout
+              ? "🚨 Capacity collapsed"
+              : isFestivalSurge
+              ? "🔥 +62% Surge Spike (96% Peak)"
+              : isWedding
+              ? "👑 90% VIP Buyout Capacity"
+              : isSlump
+              ? "🌧️ -58% Monsoon Collapse (12%)"
+              : `Trailing: ${Math.round(pricing.currentOccupancy * 100)}% (Calm)`
+          }
+          deltaGood={!isSlump}
+          className={
+            isNormal
+              ? "border-emerald-500/30 bg-emerald-500/[0.03]"
+              : isFestivalSurge
+              ? "border-orange-500/60 bg-gradient-to-b from-orange-500/20 via-surface to-surface shadow-[0_0_20px_rgba(249,115,22,0.25)] ring-1 ring-orange-500/40"
+              : isWedding
+              ? "border-yellow-400/60 bg-gradient-to-b from-yellow-500/25 via-surface to-surface shadow-[0_0_20px_rgba(234,179,8,0.25)] ring-1 ring-yellow-400/50"
+              : isSlump
+              ? "border-indigo-500/60 bg-gradient-to-b from-indigo-500/20 via-surface to-surface"
+              : "border-red-500/60 bg-red-500/15"
+          }
+          valueClassName={
+            isNormal
+              ? "text-emerald-400 font-semibold"
+              : isFestivalSurge
+              ? "text-orange-400 font-extrabold text-3xl"
+              : isWedding
+              ? "text-yellow-300 font-extrabold text-3xl"
+              : isSlump
+              ? "text-indigo-300 font-extrabold text-3xl"
+              : "text-red-400 font-extrabold text-3xl"
+          }
         />
         <KpiTile
           label="Recommended ADR (7d)"
@@ -393,13 +529,39 @@ export default function RevenuePage() {
           delta={
             pricing.hasPricingOverride
               ? "Manager Override Active"
-              : pricing.totalOutOfOrderRooms > 0
-                ? "Scarcity yield"
-                : pricing.hasSurge
-                  ? "+Surge yield"
-                  : `Trailing: ${formatCurrency(pricing.trailingAdr, activeCurrency)}`
+              : isWingBlackout
+              ? "🚨 Scarcity yield"
+              : isFestivalSurge
+              ? "🔥 +164% Dynamic Surge Rate"
+              : isWedding
+              ? "👑 +254% Luxury Buyout Rate"
+              : isSlump
+              ? "🌧️ -43% Distress Clearance Rate"
+              : `Trailing: ${formatCurrency(pricing.trailingAdr, activeCurrency)}`
           }
-          deltaGood={true}
+          deltaGood={!isSlump}
+          className={
+            isNormal
+              ? "border-emerald-500/30 bg-emerald-500/[0.03]"
+              : isFestivalSurge
+              ? "border-amber-500/60 bg-gradient-to-b from-amber-500/20 via-surface to-surface shadow-[0_0_20px_rgba(245,158,11,0.25)] ring-1 ring-amber-500/40"
+              : isWedding
+              ? "border-yellow-400/60 bg-gradient-to-b from-yellow-500/25 via-surface to-surface shadow-[0_0_20px_rgba(234,179,8,0.3)] ring-1 ring-yellow-400/50"
+              : isSlump
+              ? "border-indigo-500/50 bg-indigo-500/10"
+              : undefined
+          }
+          valueClassName={
+            isNormal
+              ? "text-emerald-400 font-semibold"
+              : isFestivalSurge
+              ? "text-amber-300 font-extrabold text-3xl"
+              : isWedding
+              ? "text-yellow-300 font-extrabold text-3xl"
+              : isSlump
+              ? "text-indigo-300 font-extrabold text-3xl"
+              : undefined
+          }
         />
         <KpiTile
           label="Forecast RevPAR (7d)"
@@ -407,40 +569,174 @@ export default function RevenuePage() {
           delta={
             pricing.hasPricingOverride
               ? "Yield boosted"
-              : pricing.totalOutOfOrderRooms > 0
-                ? "On operable rms"
-                : pricing.hasSurge
-                  ? "+Yield boost"
-                  : `Trailing: ${formatCurrency(pricing.trailingRevPar, activeCurrency)}`
+              : isWingBlackout
+              ? "On operable rms"
+              : isFestivalSurge
+              ? "🔥 Peak Dynamic Yield"
+              : isWedding
+              ? "👑 All-Time Record RevPAR"
+              : isSlump
+              ? "🌧️ Slump Depression"
+              : `Trailing: ${formatCurrency(pricing.trailingRevPar, activeCurrency)}`
           }
-          deltaGood={true}
+          deltaGood={!isSlump}
+          className={
+            isNormal
+              ? "border-emerald-500/30 bg-emerald-500/[0.03]"
+              : isFestivalSurge
+              ? "border-amber-500/60 bg-gradient-to-b from-amber-500/20 via-surface to-surface shadow-[0_0_20px_rgba(245,158,11,0.25)] ring-1 ring-amber-500/40"
+              : isWedding
+              ? "border-yellow-400/60 bg-gradient-to-b from-yellow-500/25 via-surface to-surface shadow-[0_0_20px_rgba(234,179,8,0.3)] ring-1 ring-yellow-400/50"
+              : isSlump
+              ? "border-indigo-500/50 bg-indigo-500/10"
+              : undefined
+          }
+          valueClassName={
+            isNormal
+              ? "text-emerald-400 font-semibold"
+              : isFestivalSurge
+              ? "text-amber-300 font-extrabold text-3xl"
+              : isWedding
+              ? "text-yellow-300 font-extrabold text-3xl"
+              : isSlump
+              ? "text-indigo-300 font-extrabold text-3xl"
+              : undefined
+          }
         />
         <KpiTile
           label="Projected 7d Revenue"
           value={formatCurrency(pricing.next7ProjectedRevenue, activeCurrency)}
           delta={`Base: ${formatCurrency(pricing.baselineProjectedRevenue, activeCurrency)}`}
           deltaGood={pricing.next7ProjectedRevenue >= pricing.baselineProjectedRevenue}
+          className={
+            isNormal
+              ? "border-emerald-500/30 bg-emerald-500/[0.03]"
+              : isFestivalSurge
+              ? "border-emerald-500/60 bg-gradient-to-b from-emerald-500/20 via-surface to-surface shadow-[0_0_20px_rgba(16,185,129,0.25)] ring-1 ring-emerald-500/40"
+              : isWedding
+              ? "border-yellow-400/60 bg-gradient-to-b from-yellow-500/25 via-surface to-surface shadow-[0_0_25px_rgba(234,179,8,0.3)] ring-1 ring-yellow-400/50"
+              : isSlump
+              ? "border-indigo-500/50 bg-indigo-500/10"
+              : isWingBlackout
+              ? "border-red-500/60 bg-red-500/15"
+              : undefined
+          }
+          valueClassName={
+            isNormal
+              ? "text-emerald-400 font-semibold"
+              : isFestivalSurge
+              ? "text-emerald-300 font-extrabold text-3xl"
+              : isWedding
+              ? "text-yellow-300 font-extrabold text-3xl"
+              : isSlump
+              ? "text-rose-400 font-extrabold text-3xl"
+              : isWingBlackout
+              ? "text-red-400 font-extrabold text-3xl"
+              : undefined
+          }
         />
         <KpiTile
           label="Revenue Impact (7d)"
           value={`${pricing.revenueImpact >= 0 ? "+" : ""}${formatCurrency(pricing.revenueImpact, activeCurrency)}`}
-          delta={pricing.revenueImpact !== 0 ? "vs baseline forecast" : "Baseline on-pace"}
+          delta={
+            pricing.revenueImpact !== 0
+              ? isFestivalSurge
+                ? "🔥 Surge Windfall vs Base"
+                : isWedding
+                ? "👑 Buyout Windfall (+1.20 Cr)"
+                : isSlump
+                ? "🌧️ Weather Loss (-15.8L)"
+                : isWingBlackout
+                ? "🚨 Disaster Deficit (-28.5L)"
+                : "vs baseline forecast"
+              : "Baseline on-pace"
+          }
           deltaGood={pricing.revenueImpact >= 0}
+          className={
+            isNormal
+              ? "border-emerald-500/30 bg-emerald-500/[0.03]"
+              : isFestivalSurge
+              ? "border-emerald-500/60 bg-gradient-to-b from-emerald-500/20 via-surface to-surface shadow-[0_0_20px_rgba(16,185,129,0.25)] ring-1 ring-emerald-500/40"
+              : isWedding
+              ? "border-yellow-400/60 bg-gradient-to-b from-yellow-500/25 via-surface to-surface shadow-[0_0_25px_rgba(234,179,8,0.3)] ring-1 ring-yellow-400/50"
+              : isSlump
+              ? "border-rose-500/50 bg-rose-500/10"
+              : isWingBlackout
+              ? "border-red-500/60 bg-red-500/20 shadow-[0_0_20px_rgba(239,68,68,0.3)]"
+              : undefined
+          }
+          valueClassName={
+            isNormal
+              ? "text-emerald-400 font-semibold"
+              : isFestivalSurge
+              ? "text-emerald-300 font-extrabold text-3xl"
+              : isWedding
+              ? "text-yellow-300 font-extrabold text-3xl"
+              : isSlump
+              ? "text-rose-400 font-extrabold text-3xl"
+              : isWingBlackout
+              ? "text-red-400 font-extrabold text-3xl"
+              : undefined
+          }
         />
       </div>
 
-      <Card title="Forecasted Demand (Next 21 Days)" subtitle="Resort-wide booked occupancy against operational capacity" className="mt-4">
+      <Card
+        title="Forecasted Demand (Next 21 Days)"
+        subtitle={
+          isFestivalSurge
+            ? "🔥 SURGE SHIFT: Booked occupancy rockets to 95-96% across all resort wings"
+            : isWedding
+            ? "👑 VIP BUYOUT: 90% capacity locked for private royal party"
+            : isSlump
+            ? "🌧️ MONSOON SLUMP: Severe drop to 12% off-peak floor"
+            : isWingBlackout
+            ? "🚨 POWER DISRUPTION: 40 rooms removed from available inventory"
+            : "Resort-wide booked occupancy against operational capacity (Calm baseline)"
+        }
+        className="mt-4"
+      >
         <LineTrendChart
           data={demandTrend}
-          series={[{ key: "occupancy", label: "Booked occupancy %", color: "var(--series-1)" }]}
+          series={[
+            {
+              key: "occupancy",
+              label: isFestivalSurge
+                ? "🔥 Festival Surge Booked Occupancy %"
+                : isWedding
+                ? "👑 VIP Wedding Buyout Occupancy %"
+                : isSlump
+                ? "🌧️ Monsoon Slump Occupancy %"
+                : isWingBlackout
+                ? "🚨 Outage Constrained Occupancy %"
+                : "Booked occupancy % (Baseline)",
+              color: isFestivalSurge
+                ? "#ea580c"
+                : isWedding
+                ? "#eab308"
+                : isSlump
+                ? "#6366f1"
+                : isWingBlackout
+                ? "#ef4444"
+                : "#06b6d4",
+            },
+          ]}
           format="percent"
         />
         <div className="mt-3 flex flex-wrap gap-2">
           {state.demandEvents.map((e) => (
             <StatusBadge
               key={e.date + e.label}
-              label={`${e.date.slice(5)} · ${e.label} (+${Math.round(e.demandBoost * 100)}%)`}
-              variant={e.label.includes("Festival") || e.label.includes("Surprise") ? "serious" : "neutral"}
+              label={`${e.date.slice(5)} · ${e.label} (${e.demandBoost >= 0 ? "+" : ""}${Math.round(e.demandBoost * 100)}%)`}
+              variant={
+                e.demandBoost < 0
+                  ? "serious"
+                  : e.label.includes("Festival") || e.label.includes("Surprise")
+                  ? "serious"
+                  : e.label.includes("Wedding") || e.label.includes("Buyout")
+                  ? "good"
+                  : "neutral"
+              }
             />
           ))}
         </div>

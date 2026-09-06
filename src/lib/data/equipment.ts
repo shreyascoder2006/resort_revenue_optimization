@@ -72,6 +72,16 @@ export const EQUIPMENT_ROOM_MAPPINGS: Record<string, EquipmentRoomImpact> = {
     affectedRoomIds: Array.from({ length: 15 }, (_, i) => `deluxe-ocean-${201 + i}`),
     description: "Chiller Unit 2 failure takes 15 Deluxe Ocean View rooms offline due to loss of HVAC cooling.",
   },
+  "eq-11": {
+    equipmentId: "eq-11",
+    roomTypeId: "deluxe-ocean",
+    affectedRoomCount: 40,
+    affectedRoomIds: [
+      ...Array.from({ length: 25 }, (_, i) => `deluxe-ocean-${201 + i}`),
+      ...Array.from({ length: 15 }, (_, i) => `lagoon-villa-${301 + i}`),
+    ],
+    description: "Main Power Substation & Generator failure takes 40 rooms offline across Deluxe Ocean and Lagoon Villa wings.",
+  },
 };
 
 export function getEquipmentAffectedRooms(equipmentId: string): EquipmentRoomImpact | undefined {

@@ -27,6 +27,11 @@ export function buildStaffingPlan(stateOrEvents?: ResortState | DemandEvent[]): 
     occupiedByDate.set(f.date, (occupiedByDate.get(f.date) ?? 0) + f.bookedRooms);
   }
 
+  const surgeEvent = isState ? stateOrEvents.activeEvents.find((e) => e.type === "DEMAND_SURGE") : undefined;
+  const isWedding = Boolean(surgeEvent && ((surgeEvent.label ?? "") + " " + (surgeEvent.details?.reason ?? "")).toLowerCase().includes("wedding"));
+  const failureEvent = isState ? stateOrEvents.activeEvents.find((e) => e.type === "EQUIPMENT_FAILURE") : undefined;
+  const isWingBlackout = Boolean(failureEvent && (failureEvent.details?.equipmentId === "eq-11" || Number(failureEvent.details?.affectedRoomCount ?? 0) > 20));
+
   const scheduleByKey = new Map(schedule.map((s) => [`${s.date}|${s.departmentId}`, s.scheduledStaff]));
 
   const rows: StaffingDay[] = [];
@@ -34,7 +39,15 @@ export function buildStaffingPlan(stateOrEvents?: ResortState | DemandEvent[]): 
     for (const dept of departments) {
       const scheduledStaff = scheduleByKey.get(`${date}|${dept.id}`);
       if (scheduledStaff === undefined) continue; // outside scheduled window
-      const requiredStaff = Math.max(dept.minStaff, Math.ceil(occupiedRooms / dept.roomsPerStaff));
+      let requiredStaff = Math.max(dept.minStaff, Math.ceil(occupiedRooms / dept.roomsPerStaff));
+      
+      // Scenario-specific staffing requirements
+      if (isWedding && (dept.id === "food-beverage" || dept.name.includes("Food") || dept.id === "front-desk" || dept.name.includes("Front"))) {
+        requiredStaff += 8; // Dedicated VIP banquet and private butler staffing
+      } else if (isWingBlackout && (dept.id === "maintenance" || dept.name.includes("Maintenance"))) {
+        requiredStaff += 7; // Substation power restoration & emergency wiring crew
+      }
+
       const gap = scheduledStaff - requiredStaff;
       rows.push({
         date,

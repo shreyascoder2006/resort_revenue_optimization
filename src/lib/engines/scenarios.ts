@@ -7,7 +7,7 @@ import { buildInventoryStatus } from "./inventory";
 import { buildMaintenanceRisks } from "./maintenance";
 import { buildSentimentSummary } from "./sentiment";
 
-export type ScenarioIcon = "zap" | "wrench" | "trending-down";
+export type ScenarioIcon = "zap" | "wrench" | "trending-down" | "cloud-rain" | "sparkles" | "alert-triangle";
 export type StepIcon = "zap" | "pricing" | "staffing" | "inventory" | "maintenance" | "sentiment" | "check";
 export type AlertVariant = "good" | "warning" | "serious" | "critical";
 
@@ -50,20 +50,38 @@ export interface ScenarioOutcome {
 export const SCENARIOS: ScenarioDefinition[] = [
   {
     id: "festival",
-    label: "Surprise Festival Announced",
-    description: "A major festival gets announced for 2 days from now with almost no notice.",
+    label: "Festival Demand Surge (+120%)",
+    description: "Unplanned regional festival creates a massive booking wave. 95% peak occupancy, dynamic rate surge to ₹17,000+ ADR.",
     icon: "zap",
+  },
+  {
+    id: "wedding-buyout",
+    label: "VIP Royal Wedding Buyout",
+    description: "Ultra-wealthy wedding party reserves 90% resort capacity with luxury buyout pricing surging to ₹26,000+ ADR.",
+    icon: "sparkles",
+  },
+  {
+    id: "monsoon-slump",
+    label: "Monsoon Storm Slump (-70%)",
+    description: "Severe cyclone weather warning causes mass cancellations; occupancy crashes to 12% triggering deep distress discounts.",
+    icon: "cloud-rain",
   },
   {
     id: "equipment-failure",
     label: "Chiller Fails Overnight",
-    description: "A chiller unit's sensor readings spike overnight and rooms start running hot.",
+    description: "Chiller Unit 2 sensor spike overnight takes 15 Deluxe Ocean rooms offline with HVAC cooling lost.",
     icon: "wrench",
+  },
+  {
+    id: "wing-blackout",
+    label: "Major Wing Substation Blackout",
+    description: "Catastrophic electrical failure takes 40 rooms offline across two wings, requiring emergency guest relocations.",
+    icon: "alert-triangle",
   },
   {
     id: "guest-complaint",
     label: "Guest Complaint Traced to Root Cause",
-    description: "A VIP guest complaint about lukewarm spa water triggers automated root-cause diagnostics, maintenance work orders, and service recovery.",
+    description: "VIP guest complaint about lukewarm spa water triggers automated root-cause diagnostics, maintenance, and service recovery.",
     icon: "trending-down",
   },
 ];
@@ -77,7 +95,7 @@ function avgOnDate(recs: PriceRecommendation[], date: string, key: "recommendedR
 function runFestivalScenario(customBoost?: number): ScenarioOutcome {
   const def = SCENARIOS[0];
   const eventDate = isoDate(addDays(TODAY, 2));
-  const boost = customBoost ?? 0.20;
+  const boost = customBoost ?? 1.20;
   const event: DemandEvent = { date: eventDate, label: def.label, demandBoost: boost };
 
   const pricingBefore = buildPricingRecommendations();
@@ -472,18 +490,254 @@ function runGuestComplaintScenario(): ScenarioOutcome {
   return { id: def.id, label: def.label, description: def.description, steps, kpis, alerts };
 }
 
+function runMonsoonSlumpScenario(): ScenarioOutcome {
+  const def = SCENARIOS.find((s) => s.id === "monsoon-slump") ?? SCENARIOS[2];
+  const eventDate = isoDate(addDays(TODAY, 1));
+  const event: DemandEvent = { date: eventDate, label: "Monsoon Cyclonic Alert", demandBoost: -0.70 };
+
+  const pricingBefore = buildPricingRecommendations();
+  const staffingBefore = buildStaffingPlan();
+
+  const pricingAfter = buildPricingRecommendations([event]);
+  const staffingAfter = buildStaffingPlan([event]);
+
+  const rateBefore = avgOnDate(pricingBefore.recommendations, eventDate, "recommendedRate");
+  const rateAfter = avgOnDate(pricingAfter.recommendations, eventDate, "recommendedRate");
+
+  const overstaffedAfterCount = staffingAfter.filter((s) => s.status === "Overstaffed").length;
+
+  const steps: ScenarioStep[] = [
+    {
+      key: "trigger",
+      icon: "zap",
+      title: "Severe Monsoon Storm Alert",
+      detail: `Heavy cyclone and flight disruptions trigger mass cancellations for ${eventDate}. Demand collapses by 70%.`,
+    },
+    {
+      key: "pricing",
+      icon: "pricing",
+      title: "Revenue engine implements clearance stimulus",
+      detail: `Average recommended rate plummets from ₹${Math.round(rateBefore).toLocaleString()} down to ₹${Math.round(rateAfter).toLocaleString()} (-43% distress discount) to salvage occupancy.`,
+    },
+    {
+      key: "staffing",
+      icon: "staffing",
+      title: "Staffing engine flags surplus labor",
+      detail: `${overstaffedAfterCount} department shifts now overstaffed as occupancy drops to 12%. Reassigned labor to deep cleaning and preventive maintenance.`,
+    },
+    {
+      key: "summary",
+      icon: "check",
+      title: "Demand slump response coordinated",
+      detail: "Pricing discount activated immediately while operations shifted surplus staff to facility improvement projects.",
+    },
+  ];
+
+  const kpis: ScenarioKpi[] = [
+    {
+      label: `Forecast Occupancy, ${eventDate}`,
+      before: `${Math.round(pricingBefore.forecastOccupancy * 100)}%`,
+      after: "12%",
+      good: false,
+    },
+    {
+      label: `Avg. recommended rate, ${eventDate}`,
+      before: `₹${Math.round(rateBefore).toLocaleString()}`,
+      after: `₹${Math.round(rateAfter).toLocaleString()}`,
+      good: false,
+    },
+    {
+      label: "Overstaffed labor shifts",
+      before: `${staffingBefore.filter((s) => s.status === "Overstaffed").length}`,
+      after: `${overstaffedAfterCount}`,
+      good: false,
+    },
+  ];
+
+  const alerts: ScenarioAlert[] = [
+    {
+      engine: "Pricing",
+      variant: "warning",
+      text: `Distress clearance pricing active for ${eventDate}: Base rates discounted by up to 45% to stimulate local drive-in demand.`,
+    },
+    {
+      engine: "Staffing",
+      variant: "warning",
+      text: `${overstaffedAfterCount} staff shifts identified for operational reassignment to preventive property maintenance.`,
+    },
+  ];
+
+  return { id: def.id, label: def.label, description: def.description, steps, kpis, alerts };
+}
+
+function runWeddingBuyoutScenario(): ScenarioOutcome {
+  const def = SCENARIOS.find((s) => s.id === "wedding-buyout") ?? SCENARIOS[1];
+  const eventDate = isoDate(addDays(TODAY, 2));
+  const event: DemandEvent = { date: eventDate, label: "VIP Royal Wedding Buyout", demandBoost: 1.50 };
+
+  const pricingBefore = buildPricingRecommendations();
+  const staffingBefore = buildStaffingPlan();
+
+  const pricingAfter = buildPricingRecommendations([event]);
+  const staffingAfter = buildStaffingPlan([event]);
+
+  const rateBefore = avgOnDate(pricingBefore.recommendations, eventDate, "recommendedRate");
+  const rateAfter = avgOnDate(pricingAfter.recommendations, eventDate, "recommendedRate");
+
+  const understaffedAfterCount = staffingAfter.filter((s) => s.status === "Understaffed").length;
+
+  const steps: ScenarioStep[] = [
+    {
+      key: "trigger",
+      icon: "zap",
+      title: "Exclusive Multi-Wing Buyout Signed",
+      detail: `High-net-worth destination wedding reserves 90% of resort inventory for ${eventDate} including all oceanfront suites.`,
+    },
+    {
+      key: "pricing",
+      icon: "pricing",
+      title: "Ultra-luxury buyout yield unlocked",
+      detail: `Average recommended rate surges from ₹${Math.round(rateBefore).toLocaleString()} to ₹${Math.round(rateAfter).toLocaleString()} (+254% luxury yield).`,
+    },
+    {
+      key: "staffing",
+      icon: "staffing",
+      title: "VIP banquet & butler staffing surge",
+      detail: `Staffing engine identifies ${understaffedAfterCount} shifts requiring supplementary banquet and concierge personnel.`,
+    },
+    {
+      key: "summary",
+      icon: "check",
+      title: "Record revenue windfall projected",
+      detail: "7-day dynamic revenue projected to reach ₹1.44+ Crore with premium private event margins.",
+    },
+  ];
+
+  const kpis: ScenarioKpi[] = [
+    {
+      label: `Forecast Occupancy, ${eventDate}`,
+      before: `${Math.round(pricingBefore.forecastOccupancy * 100)}%`,
+      after: "90%",
+      good: true,
+    },
+    {
+      label: `Avg. recommended rate, ${eventDate}`,
+      before: `₹${Math.round(rateBefore).toLocaleString()}`,
+      after: `₹${Math.round(rateAfter).toLocaleString()}`,
+      good: true,
+    },
+    {
+      label: "Projected 7d Revenue",
+      before: `₹${Math.round(pricingBefore.next7ProjectedRevenue).toLocaleString()}`,
+      after: "₹1,44,50,000",
+      good: true,
+    },
+  ];
+
+  const alerts: ScenarioAlert[] = [
+    {
+      engine: "Pricing",
+      variant: "good",
+      text: `Record Yield Alert: VIP Wedding Buyout active at ₹26,400+ ADR. Projected revenue lift exceeding +320%.`,
+    },
+    {
+      engine: "Staffing",
+      variant: "warning",
+      text: `Front Desk & Food & Beverage: Mobilize ${understaffedAfterCount} supplementary event shifts for banquet catering.`,
+    },
+  ];
+
+  return { id: def.id, label: def.label, description: def.description, steps, kpis, alerts };
+}
+
+function runWingBlackoutScenario(): ScenarioOutcome {
+  const def = SCENARIOS.find((s) => s.id === "wing-blackout") ?? SCENARIOS[4];
+  const targetId = "eq-11"; // Main Substation / Generator
+
+  const maintenanceBefore = buildMaintenanceRisks();
+  const maintenanceAfter = buildMaintenanceRisks(targetId);
+  const targetBefore = maintenanceBefore.find((m) => m.equipment.id === targetId) ?? maintenanceBefore[0];
+
+  const steps: ScenarioStep[] = [
+    {
+      key: "trigger",
+      icon: "zap",
+      title: "Main Electrical Substation Fire & Failure",
+      detail: "Substation short circuit trips utility yard transformer, knocking out power, HVAC, and keycards to 40 rooms across Deluxe Ocean & Lagoon Villa wings.",
+    },
+    {
+      key: "pricing",
+      icon: "pricing",
+      title: "Capacity collapses from 150 to 110 operable rooms",
+      detail: "27% of resort inventory immediately offline. Revenue engine halts booking of impacted categories and recalibrates inventory constraints.",
+    },
+    {
+      key: "sentiment",
+      icon: "sentiment",
+      title: "Emergency guest relocations required",
+      detail: "35+ guests requiring immediate off-site transfer to partner resort properties. Automated $150 compensation credits queued.",
+    },
+    {
+      key: "summary",
+      icon: "check",
+      title: "Disaster protocol active",
+      detail: "Emergency generators deployed for life-safety systems; partner hotel transfer coordination underway.",
+    },
+  ];
+
+  const kpis: ScenarioKpi[] = [
+    {
+      label: "Operational room capacity",
+      before: "150 / 150 (100%)",
+      after: "110 / 150 (73%)",
+      good: false,
+    },
+    {
+      label: "Out of order rooms",
+      before: "0 rooms",
+      after: "40 rooms",
+      good: false,
+    },
+    {
+      label: "Estimated 7d Revenue Impact",
+      before: "₹0",
+      after: "-₹28,50,000",
+      good: false,
+    },
+  ];
+
+  const alerts: ScenarioAlert[] = [
+    {
+      engine: "Maintenance",
+      variant: "critical",
+      text: "CATASTROPHIC OUTAGE: Utility Substation offline. 40 rooms non-operable across Deluxe Ocean and Lagoon Villa wings.",
+    },
+    {
+      engine: "Guest Experience",
+      variant: "critical",
+      text: "Emergency Protocol: Execute room transfers and compensation for 35 displaced in-house and arriving guests.",
+    },
+  ];
+
+  return { id: def.id, label: def.label, description: def.description, steps, kpis, alerts };
+}
+
 export function runScenario(id: string, boost?: number): ScenarioOutcome {
   switch (id) {
     case "festival":
       return runFestivalScenario(boost);
+    case "wedding-buyout":
+      return runWeddingBuyoutScenario();
+    case "monsoon-slump":
+      return runMonsoonSlumpScenario();
     case "equipment-failure":
     case "chiller":
       return runEquipmentFailureScenario();
+    case "wing-blackout":
+      return runWingBlackoutScenario();
     case "guest-complaint":
       return runGuestComplaintScenario();
-    case "group-cancel":
-      return runGroupCancelScenario();
     default:
-      throw new Error(`Unknown scenario: ${id}`);
+      return runFestivalScenario(boost);
   }
 }

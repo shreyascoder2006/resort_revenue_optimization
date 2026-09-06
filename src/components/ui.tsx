@@ -30,17 +30,21 @@ export function KpiTile({
   delta,
   deltaLabel,
   deltaGood,
+  className,
+  valueClassName,
 }: {
   label: string;
   value: string;
   delta?: string;
   deltaLabel?: string;
   deltaGood?: boolean;
+  className?: string;
+  valueClassName?: string;
 }) {
   return (
-    <div className="rounded-xl border border-border-strong bg-surface p-4">
+    <div className={clsx("rounded-xl border border-border-strong bg-surface p-4 transition-all duration-300", className)}>
       <p className="text-xs font-medium text-ink-muted">{label}</p>
-      <p className="mt-1.5 text-2xl font-semibold tabular-nums text-ink">{value}</p>
+      <p className={clsx("mt-1.5 text-2xl font-semibold tabular-nums text-ink", valueClassName)}>{value}</p>
       {delta && (
         <p className={clsx("mt-1 text-xs font-medium", deltaGood ? "text-status-good" : "text-status-critical")}>
           {delta} {deltaLabel && <span className="text-ink-muted font-normal">{deltaLabel}</span>}

@@ -3,6 +3,7 @@
 import { useResortStore } from "@/lib/store/resortStore";
 import { Zap, RotateCcw, ArrowRight } from "lucide-react";
 import Link from "next/link";
+import clsx from "clsx";
 import { formatCurrency } from "@/lib/utils/currency";
 
 import { buildPricingRecommendations } from "@/lib/engines/pricing";
@@ -23,21 +24,41 @@ export default function LiveEventBanner() {
   const guestImpact = buildGuestImpactSummary(state);
   const diagnostics = buildComplaintDiagnosticSummary(state);
   const understaffed = staffing.filter((s) => s.status === "Understaffed").length;
+  const isSurge = state.activeEvents.some((e) => e.type === "DEMAND_SURGE");
 
   return (
-    <div className="mb-6 rounded-xl border border-amber-500/40 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent p-3.5 text-sm text-ink backdrop-blur-sm shadow-sm">
+    <div
+      className={clsx(
+        "mb-6 rounded-xl border p-3.5 text-sm text-ink backdrop-blur-sm transition-all duration-300",
+        isSurge
+          ? "border-orange-500/60 bg-gradient-to-r from-amber-500/20 via-orange-500/15 to-rose-500/15 shadow-[0_0_25px_rgba(245,158,11,0.25)] ring-1 ring-orange-500/40"
+          : "border-amber-500/40 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent shadow-sm"
+      )}
+    >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-2.5">
-          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-amber-400">
+          <span
+            className={clsx(
+              "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full",
+              isSurge ? "bg-orange-500/30 text-amber-300" : "bg-amber-500/20 text-amber-400"
+            )}
+          >
             <Zap className="h-3.5 w-3.5 animate-pulse" />
           </span>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="font-semibold text-amber-400">LIVE RESORT STATE ACTIVE</span>
+              <span className={clsx("font-extrabold tracking-wide", isSurge ? "text-amber-300" : "text-amber-400")}>
+                {isSurge ? "🔥 EXTREME FESTIVAL SURGE ACTIVE" : "LIVE RESORT STATE ACTIVE"}
+              </span>
               {state.activeEvents.map((ev) => (
                 <span
                   key={ev.id}
-                  className="rounded-md bg-amber-500/20 px-2 py-0.5 text-xs font-semibold text-amber-300 border border-amber-500/30"
+                  className={clsx(
+                    "rounded-md px-2 py-0.5 text-xs font-extrabold border",
+                    isSurge
+                      ? "bg-gradient-to-r from-amber-500/40 to-orange-500/40 text-amber-200 border-amber-400 shadow-sm"
+                      : "bg-amber-500/20 text-amber-300 border-amber-500/30"
+                  )}
                 >
                   {ev.label}
                 </span>

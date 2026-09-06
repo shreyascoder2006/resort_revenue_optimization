@@ -568,7 +568,7 @@ export const useResortStore = create<ResortStore>()(
       },
     }),
     {
-      name: "smart-resort-360-state-v1",
+      name: "smart-resort-360-state-v4",
       storage: createJSONStorage(() =>
         typeof window !== "undefined"
           ? window.localStorage

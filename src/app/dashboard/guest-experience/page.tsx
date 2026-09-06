@@ -7,6 +7,7 @@ import { buildGuestImpactSummary } from "@/lib/engines/guestImpact";
 import { buildComplaintDiagnosticSummary } from "@/lib/engines/complaintDiagnostics";
 import { useResortStore } from "@/lib/store/resortStore";
 import ConciergeChat from "@/components/ConciergeChat";
+import ScenarioSwitcher from "@/components/ScenarioSwitcher";
 import { AlertTriangle, Users, BedDouble, ArrowRightLeft, ShieldAlert, Sparkles, Wrench, CheckCircle2 } from "lucide-react";
 
 export default function GuestExperiencePage() {
@@ -15,55 +16,108 @@ export default function GuestExperiencePage() {
   const guestImpact = buildGuestImpactSummary(state);
   const diagnostics = buildComplaintDiagnosticSummary(state);
 
+  const activeDemandEvent = state.activeEvents.find((e) => e.type === "DEMAND_SURGE");
+  const demandReason = ((activeDemandEvent?.label ?? "") + " " + (activeDemandEvent?.details?.reason ?? "")).toLowerCase();
+  const isWedding = Boolean(activeDemandEvent && (demandReason.includes("wedding") || demandReason.includes("buyout")));
+  const isSlump = Boolean(activeDemandEvent && (((activeDemandEvent.details?.demandBoost as number | undefined) ?? 0) < 0 || demandReason.includes("monsoon") || demandReason.includes("storm")));
+  const isFestivalSurge = Boolean(activeDemandEvent && !isWedding && !isSlump);
+
+  const activeEqEvent = state.activeEvents.find((e) => e.type === "EQUIPMENT_FAILURE");
+  const isWingBlackout = Boolean(activeEqEvent && (activeEqEvent.details?.equipmentId === "eq-11" || guestImpact.affectedRoomCount > 20));
+  const isChillerFailure = Boolean(activeEqEvent && !isWingBlackout);
+  const isNormal = state.activeEvents.length === 0;
+
   const aspectData = sentiment.byAspect.map((a) => {
     const isComplaintAspect = diagnostics.hasActiveComplaint && a.aspect === diagnostics.complaint?.aspect;
     const value = isComplaintAspect ? diagnostics.sentimentPlunge.impactedScore : Math.round(a.avgScore * 100) / 100;
+    
+    // Dynamic color coding based on scenario sentiment values
+    const color =
+      value >= 0.8
+        ? "#eab308" // Royal gold for elite buyout
+        : value >= 0.4
+        ? "#10b981" // Healthy emerald
+        : value >= 0.1
+        ? "#06b6d4" // Calm cyan
+        : value >= -0.2
+        ? "#f59e0b" // Warning amber
+        : "#ef4444"; // Critical red for breakdowns/queues
+
     return {
       label: a.aspect,
       value,
-      color: value < 0 ? "var(--series-8)" : "var(--series-1)",
+      color,
     };
   });
 
-  const decliningAspects = sentiment.byAspect.filter((a) => a.trendDelta < -0.1);
+  const decliningAspects = sentiment.byAspect.filter((a) => a.trendDelta < -0.1 || a.avgScore < 0);
 
   return (
     <div>
       <PageHeader
-        title="Guest Experience"
-        description="Sentiment analysis across reviews, live guest relocation tracking, and AI concierge service."
+        title="Guest Experience & Sentiment"
+        description="Live sentiment tracking across reviews, real-time guest relocation roster, and AI concierge service."
       />
 
-      {guestImpact.serviceRiskDetail && (
-        <div
-          className={`mb-4 rounded-xl border p-4 text-sm backdrop-blur-sm ${
-            guestImpact.hasEquipmentFailure
-              ? "border-rose-500/40 bg-rose-500/10 text-rose-200"
-              : "border-amber-500/40 bg-amber-500/10 text-ink"
-          }`}
-        >
-          <div className="flex items-center justify-between gap-2">
-            <div
-              className={`flex items-center gap-2 font-semibold ${
-                guestImpact.hasEquipmentFailure ? "text-rose-300" : "text-amber-400"
-              }`}
-            >
-              <AlertTriangle className="h-4 w-4" />
-              <span>
-                {guestImpact.hasEquipmentFailure
-                  ? `Equipment Outage Disruption (${guestImpact.serviceRiskLevel} Risk)`
-                  : `Service Capacity Alert (${guestImpact.serviceRiskLevel} Risk)`}
-              </span>
-            </div>
-            {guestImpact.hasEquipmentFailure && (
-              <span className="rounded bg-rose-500/20 px-2 py-0.5 text-xs font-semibold text-rose-300">
-                Climate Control Outage
-              </span>
-            )}
+      <ScenarioSwitcher />
+
+      {/* Scenario State Indicator Banner */}
+      {isNormal ? (
+        <div className="mb-4 flex items-center justify-between rounded-xl border border-emerald-500/30 bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent px-4 py-3 text-xs text-emerald-300 shadow-sm">
+          <div className="flex items-center gap-2 font-medium">
+            <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)] animate-pulse" />
+            <span className="font-semibold tracking-wide uppercase text-emerald-400">Normal Stage Active:</span>
+            <span>Balanced guest satisfaction (4.4★ avg) · Zero room disruptions · Tranquil off-peak service delivery</span>
           </div>
-          <p className="mt-1 text-xs text-ink-secondary">{guestImpact.serviceRiskDetail}</p>
+          <span className="hidden sm:inline-block rounded bg-emerald-500/20 px-2.5 py-0.5 font-bold text-emerald-300 border border-emerald-500/30">
+            OPTIMAL CALM
+          </span>
         </div>
-      )}
+      ) : isFestivalSurge ? (
+        <div className="mb-4 flex items-center justify-between rounded-xl border border-orange-500/60 bg-gradient-to-r from-amber-500/25 via-orange-500/20 to-rose-500/20 px-4 py-3 text-xs text-amber-200 shadow-[0_0_30px_rgba(245,158,11,0.25)] ring-1 ring-orange-500/40 animate-pulse">
+          <div className="flex items-center gap-2 font-medium">
+            <span className="text-base">🔥</span>
+            <span className="font-extrabold tracking-wide uppercase text-amber-300">CROWD CAPACITY STRAIN (FESTIVAL):</span>
+            <span>95% occupancy wave causing severe check-in queues (-0.58) and overwhelmed staff (-0.42) ratings. Front desk reinforcements needed!</span>
+          </div>
+          <span className="hidden sm:inline-block rounded bg-gradient-to-r from-amber-500 to-orange-600 px-2.5 py-1 font-extrabold text-white shadow-md">
+            HIGH QUEUE RISK
+          </span>
+        </div>
+      ) : isWedding ? (
+        <div className="mb-4 flex items-center justify-between rounded-xl border border-yellow-400/60 bg-gradient-to-r from-yellow-500/25 via-amber-500/20 to-yellow-600/20 px-4 py-3 text-xs text-yellow-200 shadow-[0_0_30px_rgba(234,179,8,0.25)] ring-1 ring-yellow-400/40 animate-pulse">
+          <div className="flex items-center gap-2 font-medium">
+            <span className="text-base">👑</span>
+            <span className="font-extrabold tracking-wide uppercase text-yellow-300">ROYAL WEDDING VIP SATISFACTION:</span>
+            <span>All-time record guest sentiment (+0.92 overall · 4.95★)! Five-star reviews for private banquets, butlers, and bespoke spa.</span>
+          </div>
+          <span className="hidden sm:inline-block rounded bg-gradient-to-r from-yellow-500 to-amber-600 px-2.5 py-1 font-extrabold text-white shadow-md">
+            FIVE-STAR RECORD
+          </span>
+        </div>
+      ) : isSlump ? (
+        <div className="mb-4 flex items-center justify-between rounded-xl border border-indigo-500/60 bg-gradient-to-r from-indigo-600/25 via-blue-600/20 to-slate-700/20 px-4 py-3 text-xs text-indigo-200 shadow-[0_0_30px_rgba(99,102,241,0.25)] ring-1 ring-indigo-500/40">
+          <div className="flex items-center gap-2 font-medium">
+            <span className="text-base">🌧️</span>
+            <span className="font-extrabold tracking-wide uppercase text-indigo-300">MONSOON SERENITY (OFF-SEASON):</span>
+            <span>Outdoor pool closed due to cyclone, but indoor amenities, quiet room comfort (+0.78), and personalized staff service praised!</span>
+          </div>
+          <span className="hidden sm:inline-block rounded bg-indigo-500/30 px-2.5 py-1 font-extrabold text-indigo-200 border border-indigo-400 shadow-sm">
+            PEACEFUL HAVEN
+          </span>
+        </div>
+      ) : isWingBlackout ? (
+        <div className="mb-4 flex items-center justify-between rounded-xl border border-red-500 bg-gradient-to-r from-red-600/30 via-rose-600/25 to-red-900/30 px-4 py-3 text-xs text-red-200 shadow-[0_0_35px_rgba(239,68,68,0.35)] ring-1 ring-red-500/50 animate-pulse">
+          <div className="flex items-center gap-2 font-medium">
+            <span className="text-base">🚨</span>
+            <span className="font-extrabold tracking-wide uppercase text-red-300">CRITICAL POWER OUTAGE DISRUPTION:</span>
+            <span>40 rooms without power/cooling · 35+ guests requiring immediate relocation · Room comfort collapsed to -0.88!</span>
+          </div>
+          <span className="hidden sm:inline-block rounded bg-red-600 px-2.5 py-1 font-extrabold text-white shadow-md">
+            MASS RELOCATION
+          </span>
+        </div>
+      ) : null}
 
       {/* EQUIPMENT IMPACT CARD */}
       {guestImpact.hasEquipmentFailure && (
@@ -271,29 +325,176 @@ export default function GuestExperiencePage() {
         </Card>
       )}
 
+      {!guestImpact.hasEquipmentFailure && (
+        <div className="mb-4 flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/5 px-4 py-3 text-xs text-emerald-300">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+            <span>
+              <strong>Room Integrity Verified:</strong> All 150 resort rooms have 100% climate control, power, and operational stability. Zero guest room transfers required.
+            </span>
+          </div>
+          <span className="rounded bg-emerald-500/20 px-2 py-0.5 font-bold text-emerald-300 border border-emerald-500/30">
+            100% OPERATIONAL
+          </span>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <KpiTile
-          label="Service Disruption Risk"
-          value={guestImpact.serviceRiskLevel}
-          delta={guestImpact.hasEquipmentFailure ? "Climate control outage" : guestImpact.serviceRiskLevel !== "Normal" ? "Surge capacity alert" : "Normal operating level"}
-          deltaGood={guestImpact.serviceRiskLevel === "Normal"}
+          label="Overall Sentiment Score"
+          value={`${sentiment.overallScore >= 0 ? "+" : ""}${sentiment.overallScore.toFixed(2)}`}
+          delta={
+            isWingBlackout
+              ? "🚨 Blackout sentiment collapse"
+              : isFestivalSurge
+              ? "⚡ Front desk queue erosion"
+              : isWedding
+              ? "👑 All-time record high"
+              : isSlump
+              ? "🌧️ Tranquil off-season vibe"
+              : "Historical baseline (+0.44)"
+          }
+          deltaGood={sentiment.overallScore >= 0.3}
+          className={
+            isWingBlackout
+              ? "border-red-500/60 bg-red-500/15"
+              : isWedding
+              ? "border-yellow-400/60 bg-yellow-500/10 shadow-[0_0_20px_rgba(234,179,8,0.2)]"
+              : isFestivalSurge
+              ? "border-orange-500/50 bg-orange-500/10"
+              : isSlump
+              ? "border-indigo-500/50 bg-indigo-500/10"
+              : "border-emerald-500/30 bg-emerald-500/[0.02]"
+          }
+          valueClassName={
+            isWingBlackout
+              ? "text-red-400 font-extrabold text-3xl"
+              : isWedding
+              ? "text-yellow-300 font-extrabold text-3xl"
+              : isFestivalSurge
+              ? "text-orange-400 font-extrabold text-3xl"
+              : isSlump
+              ? "text-indigo-300 font-extrabold text-3xl"
+              : "text-emerald-400 font-semibold text-3xl"
+          }
         />
         <KpiTile
-          label="Affected Guests"
-          value={guestImpact.hasEquipmentFailure ? `${guestImpact.totalAffectedGuests}` : "0"}
-          delta={guestImpact.hasEquipmentFailure ? `${guestImpact.affectedCurrentCount} in-house · ${guestImpact.affectedArrivingCount} arriving` : "Standard operations"}
-          deltaGood={guestImpact.totalAffectedGuests === 0}
+          label="Average Star Rating"
+          value={`${sentiment.overallStars.toFixed(1)} ★`}
+          delta={
+            isWingBlackout
+              ? "🚨 1-star negative wave"
+              : isFestivalSurge
+              ? "⚡ Dips on wait times"
+              : isWedding
+              ? "👑 5-star royal banquet rating"
+              : isSlump
+              ? "🌧️ Relaxed personalized rating"
+              : "Steady 4.4★ target"
+          }
+          deltaGood={sentiment.overallStars >= 4.0}
+          className={
+            isWingBlackout
+              ? "border-red-500/60 bg-red-500/15"
+              : isWedding
+              ? "border-yellow-400/60 bg-yellow-500/10 shadow-[0_0_20px_rgba(234,179,8,0.2)]"
+              : isFestivalSurge
+              ? "border-orange-500/50 bg-orange-500/10"
+              : isSlump
+              ? "border-indigo-500/50 bg-indigo-500/10"
+              : "border-emerald-500/30 bg-emerald-500/[0.02]"
+          }
+          valueClassName={
+            isWingBlackout
+              ? "text-red-400 font-extrabold text-3xl"
+              : isWedding
+              ? "text-yellow-300 font-extrabold text-3xl"
+              : isFestivalSurge
+              ? "text-orange-400 font-extrabold text-3xl"
+              : isSlump
+              ? "text-indigo-300 font-extrabold text-3xl"
+              : "text-emerald-400 font-semibold text-3xl"
+          }
         />
         <KpiTile
-          label="Relocation Required"
-          value={guestImpact.hasEquipmentFailure ? (guestImpact.relocationRequired ? "YES" : "NO") : "NO"}
-          delta={guestImpact.hasEquipmentFailure ? `${guestImpact.affectedCurrentCount + guestImpact.affectedArrivingCount} transfers needed` : "Zero reassignments"}
-          deltaGood={!guestImpact.relocationRequired}
+          label="Relocations Queued"
+          value={
+            isWingBlackout
+              ? "35 Guests"
+              : guestImpact.hasEquipmentFailure
+              ? `${guestImpact.affectedCurrentCount + guestImpact.affectedArrivingCount} Guests`
+              : "0 Guests"
+          }
+          delta={
+            isWingBlackout
+              ? "🚨 40 rooms dark (Ocean/Lagoon)"
+              : guestImpact.hasEquipmentFailure
+              ? `${guestImpact.affectedRoomCount} rooms offline`
+              : "Zero room reassignments"
+          }
+          deltaGood={!guestImpact.hasEquipmentFailure}
+          className={
+            isWingBlackout
+              ? "border-red-500/60 bg-red-500/20 shadow-[0_0_25px_rgba(239,68,68,0.3)] ring-1 ring-red-500/50"
+              : guestImpact.hasEquipmentFailure
+              ? "border-amber-500/50 bg-amber-500/10"
+              : "border-emerald-500/30 bg-emerald-500/[0.02]"
+          }
+          valueClassName={
+            isWingBlackout
+              ? "text-red-400 font-extrabold text-3xl"
+              : guestImpact.hasEquipmentFailure
+              ? "text-amber-400 font-extrabold text-3xl"
+              : "text-emerald-400 font-semibold text-3xl"
+          }
         />
         <KpiTile
-          label="Reviews Analyzed"
-          value={`${sentiment.totalReviews}`}
-          delta="Trailing 90 days"
+          label="Service Risk Level"
+          value={
+            isWingBlackout
+              ? "CATASTROPHIC"
+              : isFestivalSurge
+              ? "CRITICAL SURGE"
+              : isWedding
+              ? "VIP ELITE"
+              : isSlump
+              ? "TRANQUIL"
+              : guestImpact.serviceRiskLevel.toUpperCase()
+          }
+          delta={
+            isWingBlackout
+              ? "🚨 Relocation crisis"
+              : isFestivalSurge
+              ? "⚡ Staff & check-in strain"
+              : isWedding
+              ? "👑 1-on-1 butler coverage"
+              : isSlump
+              ? "🌧️ Unhurried service"
+              : "Optimal operating pace"
+          }
+          deltaGood={isNormal || isWedding || isSlump}
+          className={
+            isWingBlackout
+              ? "border-red-500/60 bg-red-500/15"
+              : isFestivalSurge
+              ? "border-rose-500/60 bg-rose-500/10"
+              : isWedding
+              ? "border-yellow-400/50 bg-yellow-500/10"
+              : isSlump
+              ? "border-indigo-500/50 bg-indigo-500/10"
+              : "border-emerald-500/30 bg-emerald-500/[0.02]"
+          }
+          valueClassName={
+            isWingBlackout
+              ? "text-red-400 font-extrabold text-2xl"
+              : isFestivalSurge
+              ? "text-rose-400 font-extrabold text-2xl"
+              : isWedding
+              ? "text-yellow-300 font-extrabold text-2xl"
+              : isSlump
+              ? "text-indigo-300 font-extrabold text-2xl"
+              : "text-emerald-400 font-semibold text-2xl"
+          }
         />
       </div>
 
